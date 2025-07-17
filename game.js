@@ -1,18 +1,10 @@
 /* --------------------------------------------------
- * Bullet Hell MVP (spawn invulnerability 1s added)
+ * Bullet Hell MVP (900x900 build)
  * --------------------------------------------------
- * Difficulty params from 탁경구 user spec:
- * - Movement: 2D (WASD + Arrow keys)
- * - Player diameter = 10px => radius=5
- * - Bullet radius = 0.8 * player diameter ≈ 4px
- * - Easy: HP=3, Laser warn=1.0s, Laser active=1.0s
- * - Hard: HP=1, Laser warn=0.5s, Laser active=1.0s
- * - Spawn invulnerability: 1.0s (both modes; change INVULN_* below)
- * - Score: survival time only
- * - Mode select: buttons or keys E/H
- * - Screen‑out cull buffer: 20px
+ * - Logical canvas size 900x900
+ * - Spawn invulnerability 2s (Easy/Hard)
+ * - Enter/NumpadEnter returns to Menu when Game Over
  * -------------------------------------------------- */
-
 'use strict';
 
 /* =========================
@@ -63,7 +55,7 @@ const Difficulty = Object.freeze({ EASY: 'easy', HARD: 'hard' });
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-/* --- Sync actual canvas pixel size to CONFIG --- */
+// --- Sync actual canvas pixel size to CONFIG ---
 canvas.width  = CONFIG.canvas.w;   // 900
 canvas.height = CONFIG.canvas.h;   // 900
 
@@ -88,12 +80,10 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowRight': case 'KeyD': keys.right=true; break;
     case 'KeyE': if (game.mode===GameMode.MENU) startGame(Difficulty.EASY); break;
     case 'KeyH': if (game.mode===GameMode.MENU) startGame(Difficulty.HARD); break;
- /* --- Enter: Return to Menu when Game Over --- */
+    /* --- Enter: Return to Menu when Game Over --- */
     case 'Enter':
     case 'NumpadEnter':
-      if (game.mode === GameMode.GAMEOVER) {
-        returnToMenu();
-      }
+      if (game.mode === GameMode.GAMEOVER) { returnToMenu(); }
       break;
   }
 });
@@ -276,7 +266,7 @@ function emitBulletPattern(){
   } else { // ring
     const cx=CONFIG.canvas.w/2, cy=CONFIG.canvas.h/2;
     const N=12;
-    for (let i=0;i<N;i++){
+    for (let i=0;i	N;i++){
       const ang=(i/N)*Math.PI*2;
       const vx=Math.cos(ang)*speed;
       const vy=Math.sin(ang)*speed;
@@ -426,7 +416,7 @@ function render(){
   drawGrid();
   for (const L of game.lasers) L.draw();
   for (const b of game.bullets) b.draw();
-  game.player.draw();
+  if (game.player) game.player.draw();
   drawHUD();
 }
 
@@ -455,4 +445,6 @@ function drawHUD(){
  * Init
  * ========================= */
 showMenu(); hideGameOver();
-window.addEventListener('resize',()=>{/* CSS handles scaling */});
+
+/* responsive CSS only; no logical resize */
+window.addEventListener('resize',()=>{});

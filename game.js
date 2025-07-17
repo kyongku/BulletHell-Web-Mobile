@@ -83,6 +83,13 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowRight': case 'KeyD': keys.right=true; break;
     case 'KeyE': if (game.mode===GameMode.MENU) startGame(Difficulty.EASY); break;
     case 'KeyH': if (game.mode===GameMode.MENU) startGame(Difficulty.HARD); break;
+ /* --- Enter: Return to Menu when Game Over --- */
+    case 'Enter':
+    case 'NumpadEnter':
+      if (game.mode === GameMode.GAMEOVER) {
+        returnToMenu();
+      }
+      break;
   }
 });
 window.addEventListener('keyup', (e) => {

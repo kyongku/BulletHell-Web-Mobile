@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Bullet Hell MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="ui-root">
+    <h1>Bullet Hell MVP</h1>
+    <div id="menu" class="panel">
+      <p>Select Difficulty:</p>
+      <button id="btn-easy" class="menu-btn">Easy (E)</button>
+      <button id="btn-hard" class="menu-btn">Hard (H)</button>
+      <p class="hint">Move with WASD or Arrow Keys. Dodge bullets & lasers.</p>
+    </div>
+
+    <div id="gameover" class="panel hidden">
+      <h2>Game Over</h2>
+      <p id="final-score">Score: 0.0s</p>
+      <p id="best-score">Best: 0.0s</p>
+      <button id="btn-return" class="menu-btn">Return to Menu</button>
+    </div>
+  </div>
+
+  <canvas id="game" width="800" height="600"></canvas>
+
+  <script src="game.js"></script>
+</body>
+</html>

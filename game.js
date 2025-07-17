@@ -62,6 +62,11 @@ const Difficulty = Object.freeze({ EASY: 'easy', HARD: 'hard' });
  * ========================= */
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+
+/* --- Sync actual canvas pixel size to CONFIG --- */
+canvas.width  = CONFIG.canvas.w;   // 900
+canvas.height = CONFIG.canvas.h;   // 900
+
 const uiMenu = document.getElementById('menu');
 const uiGameOver = document.getElementById('gameover');
 const btnEasy = document.getElementById('btn-easy');

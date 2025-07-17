@@ -19,7 +19,7 @@
  * Configurable parameters
  * ========================= */
 const CONFIG = {
-  canvas: { w: 800, h: 600 },
+  canvas: { w: 1200, h: 900 },
   player: {
     radius: 5,
     speedEasy: 300, // px/s

@@ -48,8 +48,8 @@ const CONFIG = {
 };
 
 // Start‑of‑game invulnerability (seconds)
-const INVULN_EASY = 1.0;
-const INVULN_HARD  = 1.0;
+const INVULN_EASY = 2.0;
+const INVULN_HARD  = 2.0;
 
 /* =========================
  * State Enums

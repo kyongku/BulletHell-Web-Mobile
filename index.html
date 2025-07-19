@@ -1,58 +1,37 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <title>Bullet Hell MVP (900x900)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <link rel="stylesheet" href="style.css" />
-
-  <!-- ✅ Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-database-compat.js"></script>
-
-  <!-- ✅ Firebase Config -->
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyDnqIp8dOVoNtC1BM_iatTX6tSO7Hmra2A",
-      authDomain: "score-513e1.firebaseapp.com",
-      databaseURL: "https://score-513e1-default-rtdb.firebaseio.com",
-      projectId: "score-513e1",
-      storageBucket: "score-513e1.firebasestorage.app",
-      messagingSenderId: "467005083552",
-      appId: "1:467005083552:web:456d61c47629b73ffa5ec5",
-      measurementId: "G-620711P42E"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-  </script>
+  <meta charset="UTF-8">
+  <title>PredictShot</title>
+  <style>
+    canvas { background: black; display: block; margin: 0 auto; }
+    .hidden { display: none; }
+    #menu, #gameover, #score-submit, #leaderboard { text-align: center; margin-top: 20px; }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
 <body>
+  <canvas id="game"></canvas>
+
   <div id="ui-root">
-    <h1>Bullet Hell MVP</h1>
-    <div id="menu" class="panel">
-      <p>Select Difficulty:</p>
-      <button id="btn-easy" class="menu-btn">Easy (E)</button>
-      <button id="btn-hard" class="menu-btn">Hard (H)</button>
-      <p class="hint">Move with WASD / Arrow Keys. Dodge bullets & lasers.</p>
+    <div id="menu">
+      <h1>PredictShot</h1>
+      <button id="btn-easy" class="menu-btn">Start Easy</button>
+      <button id="btn-hard" class="menu-btn">Start Hard</button>
     </div>
 
-    <div id="gameover" class="panel hidden">
-      <h2>Game Over</h2>
-      <p id="final-score">Score: 0.0s</p>
-      <p id="best-score">Best: 0.0s</p>
-      <button id="btn-return" class="menu-btn">Return to Menu</button>
+    <div id="gameover" class="hidden">
+      <p id="final-score"></p>
+      <p id="best-score"></p>
+      <button id="btn-return">Return to Menu</button>
     </div>
 
-    <!-- ✅ 닉네임 입력창 -->
     <div id="score-submit" class="panel hidden">
-      <p><strong>한국어로 성을 포함한 이름을 입력해주세요:</strong></p>
-      <input type="text" id="nicknameInput" placeholder="예: 김철수" maxlength="10" />
-      <button onclick="submitScore()">제출</button>
+      <h3>이름을 입력하세요</h3>
+      <input id="nicknameInput" maxlength="10" placeholder="홍길동" />
     </div>
   </div>
-
-  <!-- Logical pixel buffer 900x900 -->
-  <canvas id="game" width="900" height="900"></canvas>
 
   <script src="game.js"></script>
 </body>

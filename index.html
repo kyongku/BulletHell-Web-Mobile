@@ -5,6 +5,25 @@
   <title>Bullet Hell MVP (900x900)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link rel="stylesheet" href="style.css" />
+
+  <!-- ✅ Firebase SDK 추가 -->
+  <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-database-compat.js"></script>
+
+  <!-- ✅ Firebase 초기화 -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "너의 API 키",
+      authDomain: "score-513e1.firebaseapp.com",
+      databaseURL: "https://score-513e1-default-rtdb.firebaseio.com",
+      projectId: "score-513e1",
+      storageBucket: "score-513e1.appspot.com",
+      messagingSenderId: "너의 Sender ID",
+      appId: "너의 App ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
   <div id="ui-root">
@@ -21,6 +40,13 @@
       <p id="final-score">Score: 0.0s</p>
       <p id="best-score">Best: 0.0s</p>
       <button id="btn-return" class="menu-btn">Return to Menu</button>
+    </div>
+
+    <!-- ✅ 닉네임 입력창 -->
+    <div id="score-submit" class="panel hidden">
+      <p><strong>한국어로 성을 포함한 이름을 입력해주세요:</strong></p>
+      <input type="text" id="nicknameInput" placeholder="예: 김철수" maxlength="10" />
+      <button onclick="submitScore()">제출</button>
     </div>
   </div>
 

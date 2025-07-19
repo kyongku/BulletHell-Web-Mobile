@@ -4,10 +4,89 @@
   <meta charset="UTF-8">
   <title>PredictShot</title>
   <style>
-    canvas { background: black; display: block; margin: 0 auto; }
-    .hidden { display: none; }
-    #menu, #gameover, #score-submit { text-align: center; margin-top: 20px; }
-  </style>
+  body {
+    background: #111;
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+  }
+
+  canvas {
+    background: #000;
+    display: block;
+    margin: 20px auto;
+    border: 2px solid #444;
+  }
+
+  #ui-root {
+    margin-top: 10px;
+  }
+
+  h1 {
+    font-size: 36px;
+    margin-bottom: 20px;
+    color: #0ff;
+    text-shadow: 0 0 8px #0ff;
+  }
+
+  button.menu-btn {
+    font-size: 16px;
+    padding: 10px 20px;
+    margin: 8px;
+    border: none;
+    border-radius: 5px;
+    background-color: #222;
+    color: #0ff;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+
+  button.menu-btn:hover {
+    background-color: #0ff;
+    color: #000;
+  }
+
+  #menu, #gameover, #score-submit, #leaderboard {
+    margin-top: 20px;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  #nicknameInput {
+    padding: 8px;
+    font-size: 16px;
+    width: 180px;
+    border-radius: 4px;
+    border: none;
+    margin-top: 10px;
+  }
+
+  #btn-return {
+    margin-top: 15px;
+    padding: 10px 20px;
+    background: #444;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  #btn-return:hover {
+    background-color: #666;
+  }
+
+  #final-score, #best-score {
+    font-size: 18px;
+    color: #0f0;
+    margin: 5px;
+  }
+</style>
+
 
   <!-- Firebase CDN -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>

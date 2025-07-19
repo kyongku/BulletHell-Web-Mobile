@@ -1,56 +1,31 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>PredictShot</title>
-  <style>
-    body {
-      background: white;
-      color: black;
-      text-align: center;
-      margin: 0;
-      padding: 0;
-      font-family: sans-serif;
-    }
-    canvas {
-      display: block;
-      margin: 20px auto;
-      background: black;
-    }
-    .hidden {
-      display: none;
-    }
-    #menu, #gameover, #score-submit {
-      margin-top: 10px;
-    }
-    #score-submit input {
-      font-size: 14px;
-    }
-  </style>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <meta charset="utf-8" />
+  <title>Bullet Hell MVP (900x900)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <canvas id="game" width="900" height="900"></canvas>
-
   <div id="ui-root">
-    <div id="menu" class=""> <!-- ← hidden 제거됨 -->
-      <h1>PredictShot</h1>
-      <button id="btn-easy">Start Easy</button>
-      <button id="btn-hard">Start Hard</button>
+    <h1>Bullet Hell MVP</h1>
+    <div id="menu" class="panel">
+      <p>Select Difficulty:</p>
+      <button id="btn-easy" class="menu-btn">Easy (E)</button>
+      <button id="btn-hard" class="menu-btn">Hard (H)</button>
+      <p class="hint">Move with WASD / Arrow Keys. Dodge bullets & lasers.</p>
     </div>
 
-    <div id="gameover" class="hidden">
-      <p id="final-score"></p>
-      <p id="best-score"></p>
-      <button id="btn-return">Return to Menu</button>
-    </div>
-
-    <div id="score-submit" class="hidden">
-      <h3>이름을 입력하세요</h3>
-      <input id="nicknameInput" maxlength="10" placeholder="홍길동" />
+    <div id="gameover" class="panel hidden">
+      <h2>Game Over</h2>
+      <p id="final-score">Score: 0.0s</p>
+      <p id="best-score">Best: 0.0s</p>
+      <button id="btn-return" class="menu-btn">Return to Menu</button>
     </div>
   </div>
+
+  <!-- Logical pixel buffer 900x900 -->
+  <canvas id="game" width="900" height="900"></canvas>
 
   <script src="game.js"></script>
 </body>

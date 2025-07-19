@@ -5,6 +5,11 @@
   <title>Bullet Hell MVP (900x900)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <link rel="stylesheet" href="style.css" />
+  <style>
+    canvas { background: black; display: block; margin: 0 auto; }
+    .hidden { display: none; }
+    #menu, #gameover, #score-submit, #leaderboard { text-align: center; margin-top: 20px; }
+  </style>
 </head>
 <body>
   <div id="ui-root">
@@ -22,11 +27,27 @@
       <p id="best-score">Best: 0.0s</p>
       <button id="btn-return" class="menu-btn">Return to Menu</button>
     </div>
+
+    <div id="score-submit" class="panel hidden">
+      <h3>Enter your name</h3>
+      <input id="nicknameInput" maxlength="10" placeholder="Player" />
+    </div>
   </div>
 
   <!-- Logical pixel buffer 900x900 -->
   <canvas id="game" width="900" height="900"></canvas>
 
-  <script src="game.js"></script>
+  <script>
+    window.addEventListener("DOMContentLoaded", () => {
+      const btnEasy = document.getElementById('btn-easy');
+      const btnHard = document.getElementById('btn-hard');
+      const btnReturn = document.getElementById('btn-return');
+
+      btnEasy?.addEventListener('click', () => startGame(Difficulty.EASY));
+      btnHard?.addEventListener('click', () => startGame(Difficulty.HARD));
+      btnReturn?.addEventListener('click', returnToMenu);
+    });
+  </script>
+  <script src="game.js" defer></script>
 </body>
 </html>

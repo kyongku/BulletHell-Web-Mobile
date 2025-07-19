@@ -27,7 +27,6 @@
       font-size: 14px;
     }
   </style>
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
@@ -35,7 +34,7 @@
   <canvas id="game" width="900" height="900"></canvas>
 
   <div id="ui-root">
-    <div id="menu">
+    <div id="menu" class=""> <!-- ← hidden 제거됨 -->
       <h1>PredictShot</h1>
       <button id="btn-easy">Start Easy</button>
       <button id="btn-hard">Start Hard</button>

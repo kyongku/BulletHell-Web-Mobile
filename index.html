@@ -34,7 +34,6 @@
     </div>
   </div>
 
-  <!-- Logical pixel buffer 900x900 -->
   <canvas id="game" width="900" height="900"></canvas>
 
   <script>
@@ -43,9 +42,9 @@
       const btnHard = document.getElementById('btn-hard');
       const btnReturn = document.getElementById('btn-return');
 
-      btnEasy?.addEventListener('click', () => startGame(Difficulty.EASY));
-      btnHard?.addEventListener('click', () => startGame(Difficulty.HARD));
-      btnReturn?.addEventListener('click', returnToMenu);
+      if (btnEasy) btnEasy.addEventListener('click', () => startGame('easy'));
+      if (btnHard) btnHard.addEventListener('click', () => startGame('hard'));
+      if (btnReturn) btnReturn.addEventListener('click', () => returnToMenu());
     });
   </script>
   <script src="game.js" defer></script>

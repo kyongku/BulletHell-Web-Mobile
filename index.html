@@ -1,55 +1,35 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>PredictShot</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
     body {
-      background-color: black;
-      color: white;
-      font-family: monospace;
+      background: white;
+      color: black;
+      text-align: center;
       margin: 0;
       padding: 0;
-      text-align: center;
+      font-family: sans-serif;
     }
     canvas {
       display: block;
-      margin: 0 auto;
-      background-color: black;
-    }
-    #ui-root {
-      position: relative;
-      z-index: 10;
-    }
-    #menu, #gameover, #score-submit {
-      margin-top: 20px;
+      margin: 20px auto;
+      background: black;
     }
     .hidden {
       display: none;
     }
-    .menu-btn {
-      font-size: 16px;
-      margin: 4px;
-      padding: 8px 16px;
+    #menu, #gameover, #score-submit {
+      margin-top: 10px;
     }
-    input#nicknameInput {
-      font-size: 16px;
-      padding: 4px;
-      margin-top: 8px;
+    #score-submit input {
+      font-size: 14px;
     }
   </style>
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-  <script>
-    const firebaseConfig = {
-      databaseURL: "https://score-513e1-default-rtdb.firebaseio.com",
-    };
-    firebase.initializeApp(firebaseConfig);
-  </script>
 </head>
 <body>
   <canvas id="game" width="900" height="900"></canvas>
@@ -57,14 +37,14 @@
   <div id="ui-root">
     <div id="menu">
       <h1>PredictShot</h1>
-      <button id="btn-easy" class="menu-btn">Start Easy</button>
-      <button id="btn-hard" class="menu-btn">Start Hard</button>
+      <button id="btn-easy">Start Easy</button>
+      <button id="btn-hard">Start Hard</button>
     </div>
 
     <div id="gameover" class="hidden">
       <p id="final-score"></p>
       <p id="best-score"></p>
-      <button id="btn-return" class="menu-btn">Return to Menu</button>
+      <button id="btn-return">Return to Menu</button>
     </div>
 
     <div id="score-submit" class="hidden">

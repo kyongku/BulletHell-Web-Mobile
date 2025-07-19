@@ -6,33 +6,52 @@
   <style>
     canvas { background: black; display: block; margin: 0 auto; }
     .hidden { display: none; }
-    #menu, #gameover, #score-submit, #leaderboard { text-align: center; margin-top: 20px; }
+    #menu, #gameover, #score-submit { text-align: center; margin-top: 20px; }
   </style>
+
+  <!-- Firebase CDN -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+  <!-- Firebase 설정 -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
   <canvas id="game"></canvas>
 
-  <div id="ui-root">
-    <div id="menu">
-      <h1>PredictShot</h1>
-      <button id="btn-easy" class="menu-btn">Start Easy</button>
-      <button id="btn-hard" class="menu-btn">Start Hard</button>
-    </div>
-
-    <div id="gameover" class="hidden">
-      <p id="final-score"></p>
-      <p id="best-score"></p>
-      <button id="btn-return">Return to Menu</button>
-    </div>
-
-    <div id="score-submit" class="panel hidden">
-      <h3>이름을 입력하세요</h3>
-      <input id="nicknameInput" maxlength="10" placeholder="홍길동" />
-    </div>
+  <div id="menu">
+    <h1>PredictShot</h1>
+    <button id="btn-easy">Start Easy</button>
+    <button id="btn-hard">Start Hard</button>
   </div>
 
-  <script src="game.js"></script>
+  <div id="gameover" class="hidden">
+    <p id="final-score"></p>
+    <p id="best-score"></p>
+    <button id="btn-return">Return to Menu</button>
+  </div>
+
+  <div id="score-submit" class="hidden">
+    <h3>이름을 입력하세요</h3>
+    <input id="nicknameInput" maxlength="10" placeholder="홍길동" />
+    <button onclick="submitScore()">제출</button>
+  </div>
+
+  <script>
+    /* === game.js 전체 코드 삽입됨 === */
+    // 이 자리에 너가 전에 준 game.js의 모든 코드 복붙하면 끝남.
+    // 위에서 네가 완성한 그 코드 그대로, <script> 태그 안에 복사해 넣으면 됨.
+  </script>
 </body>
 </html>

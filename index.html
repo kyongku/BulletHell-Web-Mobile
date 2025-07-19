@@ -1,136 +1,78 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>PredictShot</title>
   <style>
-  body {
-    background: #111;
-    color: #fff;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    text-align: center;
-    margin: 0;
-    padding: 0;
-  }
-
-  canvas {
-    background: #000;
-    display: block;
-    margin: 20px auto;
-    border: 2px solid #444;
-  }
-
-  #ui-root {
-    margin-top: 10px;
-  }
-
-  h1 {
-    font-size: 36px;
-    margin-bottom: 20px;
-    color: #0ff;
-    text-shadow: 0 0 8px #0ff;
-  }
-
-  button.menu-btn {
-    font-size: 16px;
-    padding: 10px 20px;
-    margin: 8px;
-    border: none;
-    border-radius: 5px;
-    background-color: #222;
-    color: #0ff;
-    cursor: pointer;
-    transition: background-color 0.3s;
-  }
-
-  button.menu-btn:hover {
-    background-color: #0ff;
-    color: #000;
-  }
-
-  #menu, #gameover, #score-submit, #leaderboard {
-    margin-top: 20px;
-  }
-
-  .hidden {
-    display: none;
-  }
-
-  #nicknameInput {
-    padding: 8px;
-    font-size: 16px;
-    width: 180px;
-    border-radius: 4px;
-    border: none;
-    margin-top: 10px;
-  }
-
-  #btn-return {
-    margin-top: 15px;
-    padding: 10px 20px;
-    background: #444;
-    color: #fff;
-    border: none;
-    border-radius: 5px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-
-  #btn-return:hover {
-    background-color: #666;
-  }
-
-  #final-score, #best-score {
-    font-size: 18px;
-    color: #0f0;
-    margin: 5px;
-  }
-</style>
-
-
-  <!-- Firebase CDN -->
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background-color: black;
+      color: white;
+      font-family: monospace;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background-color: black;
+    }
+    #ui-root {
+      position: relative;
+      z-index: 10;
+    }
+    #menu, #gameover, #score-submit {
+      margin-top: 20px;
+    }
+    .hidden {
+      display: none;
+    }
+    .menu-btn {
+      font-size: 16px;
+      margin: 4px;
+      padding: 8px 16px;
+    }
+    input#nicknameInput {
+      font-size: 16px;
+      padding: 4px;
+      margin-top: 8px;
+    }
+  </style>
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
-
-  <!-- Firebase 설정 -->
   <script>
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      databaseURL: "https://score-513e1-default-rtdb.firebaseio.com",
     };
     firebase.initializeApp(firebaseConfig);
   </script>
 </head>
 <body>
-  <canvas id="game"></canvas>
+  <canvas id="game" width="900" height="900"></canvas>
 
-  <div id="menu">
-    <h1>PredictShot</h1>
-    <button id="btn-easy">Start Easy</button>
-    <button id="btn-hard">Start Hard</button>
+  <div id="ui-root">
+    <div id="menu">
+      <h1>PredictShot</h1>
+      <button id="btn-easy" class="menu-btn">Start Easy</button>
+      <button id="btn-hard" class="menu-btn">Start Hard</button>
+    </div>
+
+    <div id="gameover" class="hidden">
+      <p id="final-score"></p>
+      <p id="best-score"></p>
+      <button id="btn-return" class="menu-btn">Return to Menu</button>
+    </div>
+
+    <div id="score-submit" class="hidden">
+      <h3>이름을 입력하세요</h3>
+      <input id="nicknameInput" maxlength="10" placeholder="홍길동" />
+    </div>
   </div>
 
-  <div id="gameover" class="hidden">
-    <p id="final-score"></p>
-    <p id="best-score"></p>
-    <button id="btn-return">Return to Menu</button>
-  </div>
-
-  <div id="score-submit" class="hidden">
-    <h3>이름을 입력하세요</h3>
-    <input id="nicknameInput" maxlength="10" placeholder="홍길동" />
-    <button onclick="submitScore()">제출</button>
-  </div>
-
-  <script>
-    /* === game.js 전체 코드 삽입됨 === */
-    // 이 자리에 너가 전에 준 game.js의 모든 코드 복붙하면 끝남.
-    // 위에서 네가 완성한 그 코드 그대로, <script> 태그 안에 복사해 넣으면 됨.
-  </script>
+  <script src="game.js"></script>
 </body>
 </html>

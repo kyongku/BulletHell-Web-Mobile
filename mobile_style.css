@@ -1,0 +1,40 @@
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin:0; padding:0; width:100%; height:100%; background:#000; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+button { border:0; border-radius:14px; padding:12px 18px; font-size:16px; background:#14b8a6; color:#000; font-weight:700; }
+button:active { transform: scale(0.98); }
+
+#mainMenu { position: absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
+#highScore { opacity:0.9; }
+
+.overlay { position: absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; }
+.overlay .card { background:rgba(20,20,20,0.9); padding:20px; border:1px solid #333; border-radius:16px; width:min(90%, 420px); }
+
+#warning { font-size:28px; color:#ff5555; font-weight:900; text-shadow: 0 2px 8px rgba(255,0,0,0.6); }
+
+#gameCanvas { position: absolute; inset:0; width:100%; height:100%; display:none; }
+
+#ui { position:absolute; inset:0; pointer-events:none; }
+#hudTop { position:absolute; top:10px; left:10px; right:10px; display:flex; gap:10px; align-items:center; justify-content:space-between; }
+
+#hpBarContainer { position:relative; display:flex; align-items:center; gap:8px; }
+#hpBarContainer label { font-size:12px; opacity:0.9; }
+#hpBar { width:160px; height:16px; background:#333; border:1px solid #666; border-radius:10px; overflow:hidden; }
+#hpBar>div { height:100%; width:100%; background:#22c55e; }
+#hpText { position:absolute; left:36px; top:0; width:160px; height:16px; line-height:16px; text-align:center; font-size:11px; color:#fff; text-shadow:0 1px 2px #000; }
+
+#bossUi { position:absolute; top:38px; left:10px; right:10px; display:flex; align-items:center; gap:8px; }
+#bossHpBar { flex:1; height:12px; background:#222; border:1px solid #555; border-radius:8px; overflow:hidden; }
+#bossHpBar>div { height:100%; width:100%; background:#ef4444; }
+
+#scoreContainer label { font-size:12px; opacity:0.9; margin-right:6px; }
+#scoreContainer span { font-size:16px; font-weight:700; }
+
+/* 조이스틱 */
+#joystick { position: absolute; left:18px; bottom:18px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); display:none; }
+#stick { position:absolute; left:50%; top:50%; width:56px; height:56px; margin-left:-28px; margin-top:-28px; border-radius:50%; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.35); }
+
+/* Safe area for iOS notch */
+@supports (padding: max(0px)) {
+  #hudTop { padding-top: max(10px, env(safe-area-inset-top)); }
+  #joystick { left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); }
+}

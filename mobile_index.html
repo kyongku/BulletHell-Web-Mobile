@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <title>BulletHell-Web (Mobile - Local)</title>
+  <link rel="stylesheet" href="mobile_style.css"/>
+</head>
+<body>
+  <!-- 메인 메뉴 -->
+  <div id="mainMenu">
+    <h1>BulletHell-Mobile</h1>
+    <button id="btnStart">게임 시작</button>
+    <div id="highScore">최고 점수(로컬): <span id="best">0</span></div>
+  </div>
+
+  <!-- 경고 메시지 -->
+  <div id="warning" class="overlay" style="display:none">
+    ⚠️ 보스 곧 등장! ⚠️
+  </div>
+
+  <!-- 게임 캔버스 -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD -->
+  <div id="ui" style="display:none">
+    <div id="hudTop">
+      <div id="hpBarContainer">
+        <label>HP</label>
+        <div id="hpBar"><div></div></div>
+        <div id="hpText"></div>
+      </div>
+      <div id="scoreContainer">
+        <label>점수</label>
+        <span id="score">0</span>
+      </div>
+    </div>
+    <div id="bossUi" style="display:none">
+      <label>Boss</label>
+      <div id="bossHpBar"><div></div></div>
+    </div>
+  </div>
+
+  <!-- 조이스틱 -->
+  <div id="joystick">
+    <div id="stick"></div>
+  </div>
+
+  <!-- 게임오버 -->
+  <div id="gameOverScreen" class="overlay" style="display:none">
+    <div class="card">
+      <h2>게임 오버</h2>
+      <div>최종 점수: <span id="finalScore">0</span></div>
+      <button id="btnRetry">다시하기</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import './mobile_game.js';
+  </script>
+</body>
+</html>

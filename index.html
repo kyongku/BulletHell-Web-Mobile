@@ -3,35 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <title>BulletHell (Landscape, Single File — FIXED)</title>
+  <title>BulletHell (Landscape Small, Single File)</title>
   <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin:0; padding:0; width:100%; height:100%; background:#000; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow:hidden; }
     button { border:0; border-radius:14px; padding:12px 18px; font-size:16px; background:#14b8a6; color:#000; font-weight:700; }
     button:active { transform: scale(0.98); }
     #stage { position: absolute; left:50%; top:50%; transform: translate(-50%,-50%) scale(1); transform-origin: top left; }
-    #canvasWrap { position: relative; width:900px; height:600px; }
+    /* Smaller landscape stage: 800x480 */
+    #canvasWrap { position: relative; width:800px; height:480px; }
     #mainMenu { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }
     #highScore { opacity:0.9; }
     .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; }
     .overlay .card { background:rgba(20,20,20,0.9); padding:20px; border:1px solid #333; border-radius:16px; width:min(90%, 420px); }
-    #warning { font-size:28px; color:#ff5555; font-weight:900; text-shadow: 0 2px 8px rgba(255,0,0,0.6); display:none; }
+    #warning { font-size:24px; color:#ff5555; font-weight:900; text-shadow: 0 2px 8px rgba(255,0,0,0.6); display:none; }
     #gameCanvas { background:#000; display:none; }
     #ui { position:absolute; inset:0; pointer-events:none; display:none; }
-    #hudTop { position:absolute; top:10px; left:10px; right:10px; display:flex; gap:10px; align-items:center; justify-content:space-between; }
+    #hudTop { position:absolute; top:8px; left:8px; right:8px; display:flex; gap:10px; align-items:center; justify-content:space-between; }
     #hpBarContainer { position:relative; display:flex; align-items:center; gap:8px; }
     #hpBarContainer label { font-size:12px; opacity:0.9; }
-    #hpBar { width:200px; height:18px; background:#333; border:1px solid #666; border-radius:10px; overflow:hidden; }
+    #hpBar { width:180px; height:16px; background:#333; border:1px solid #666; border-radius:10px; overflow:hidden; }
     #hpBar>div { height:100%; width:100%; background:#22c55e; }
-    #hpText { position:absolute; left:36px; top:0; width:200px; height:18px; line-height:18px; text-align:center; font-size:12px; color:#fff; text-shadow:0 1px 2px #000; }
-    #bossUi { position:absolute; top:40px; left:10px; right:10px; display:none; align-items:center; gap:8px; }
-    #bossHpBar { flex:1; height:12px; background:#222; border:1px solid #555; border-radius:8px; overflow:hidden; }
+    #hpText { position:absolute; left:34px; top:0; width:180px; height:16px; line-height:16px; text-align:center; font-size:11px; color:#fff; text-shadow:0 1px 2px #000; }
+    #bossUi { position:absolute; top:36px; left:8px; right:8px; display:none; align-items:center; gap:8px; }
+    #bossHpBar { flex:1; height:10px; background:#222; border:1px solid #555; border-radius:8px; overflow:hidden; }
     #bossHpBar>div { height:100%; width:100%; background:#ef4444; }
     #scoreContainer label { font-size:12px; opacity:0.9; margin-right:6px; }
-    #scoreContainer span { font-size:18px; font-weight:800; }
+    #scoreContainer span { font-size:16px; font-weight:800; }
     /* 조이스틱 (좌하단) */
-    #joystick { position:absolute; left:16px; bottom:16px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); display:none; }
-    #stick { position:absolute; left:50%; top:50%; width:56px; height:56px; margin-left:-28px; margin-top:-28px; border-radius:50%; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.35); }
+    #joystick { position:absolute; left:14px; bottom:14px; width:108px; height:108px; border-radius:50%; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); display:none; }
+    #stick { position:absolute; left:50%; top:50%; width:52px; height:52px; margin-left:-26px; margin-top:-26px; border-radius:50%; background:rgba(255,255,255,0.22); border:1px solid rgba(255,255,255,0.35); }
   </style>
 </head>
 <body>
@@ -43,7 +44,7 @@
         <div id="highScore">최고 점수(로컬): <span id="best">0</span></div>
       </div>
       <div id="warning" class="overlay">⚠️ 보스 곧 등장! ⚠️</div>
-      <canvas id="gameCanvas" width="900" height="600"></canvas>
+      <canvas id="gameCanvas" width="800" height="480"></canvas>
       <div id="ui">
         <div id="hudTop">
           <div id="hpBarContainer">
@@ -51,9 +52,7 @@
             <div id="hpBar"><div></div></div>
             <div id="hpText"></div>
           </div>
-          <div id="scoreContainer">
-            <label>점수</label><span id="score">0</span>
-          </div>
+          <div id="scoreContainer"><label>점수</label><span id="score">0</span></div>
         </div>
         <div id="bossUi">
           <label>Boss</label>
@@ -72,9 +71,8 @@
   </div>
 
   <script type="module">
-    // 모든 DOM 로드 후 실행
     window.addEventListener('DOMContentLoaded', () => {
-      // ====== DOM ======
+      // ===== DOM =====
       const stage = document.getElementById('stage');
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d', { alpha:false });
@@ -94,17 +92,16 @@
       const joystick = document.getElementById('joystick');
       const stick = document.getElementById('stick');
 
-      // ====== Stage scale (fit to viewport) ======
+      // ===== Fit stage =====
       function fitStage(){
-        const sw = 900, sh = 600;
-        const scale = Math.min(window.innerWidth / sw, window.innerHeight / sh);
+        const sw=800, sh=480;
+        const scale = Math.min(window.innerWidth/sw, window.innerHeight/sh);
         stage.style.transform = `translate(-50%,-50%) scale(${scale})`;
       }
-      fitStage();
-      window.addEventListener('resize', fitStage);
+      fitStage(); window.addEventListener('resize', fitStage);
       window.addEventListener('orientationchange', () => setTimeout(fitStage, 100));
 
-      // ====== Game State ======
+      // ===== Game State =====
       let lastTime = performance.now();
       const FRAME_REF = 16.6667;
       const SCORE_PER_SEC = 60;
@@ -112,12 +109,12 @@
       let player, bullets, healthPacks, score, gameOver, spawnIntervalMs, spawnTimerMs, difficultyTimerMs;
       let nextBossIdx, bossSchedule, bossActive, bossTimerMs, bossDurationMs, lastHealThreshold, lastMaxHpThreshold, boss;
 
-      // ====== Input ======
-      let input = { ax: 0, ay: 0 };
-      const JOY_RADIUS = 50, STICK_RADIUS = 24;
-      const keys = {};
+      // ===== Input =====
+      let input={ax:0, ay:0};
+      const JOY_RADIUS=50, STICK_RADIUS=26;
+      const keys={};
 
-      // ====== Entities ======
+      // ===== Entities =====
       class Bullet {
         constructor(x,y,vx,vy,r,color,dmg){ this.x=x; this.y=y; this.vx=vx; this.vy=vy; this.r=r; this.color=color; this.dmg=dmg; }
         static aimedFromEdge(){
@@ -134,26 +131,20 @@
         draw(){ ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); }
         inBounds(){ return (this.x>=-20&&this.x<=canvas.width+20&&this.y>=-20&&this.y<=canvas.height+20); }
       }
-
       class HealthPack {
         constructor(){ this.r=10; this.color='#ff66cc'; this.x=Math.random()*(canvas.width-30)+15; this.y=Math.random()*(canvas.height-30)+15; }
         draw(){
           ctx.fillStyle=this.color;
           ctx.beginPath();
-          const topCurve = this.r * 0.3;
-          ctx.moveTo(this.x, this.y + this.r * 0.3);
-          ctx.bezierCurveTo(this.x - this.r, this.y - topCurve,
-                            this.x - this.r*1.5, this.y + this.r*0.8,
-                            this.x, this.y + this.r*1.6);
-          ctx.bezierCurveTo(this.x + this.r*1.5, this.y + this.r*0.8,
-                            this.x + this.r, this.y - topCurve,
-                            this.x, this.y + this.r * 0.3);
+          const t = this.r*0.3;
+          ctx.moveTo(this.x, this.y + this.r*0.3);
+          ctx.bezierCurveTo(this.x - this.r, this.y - t, this.x - this.r*1.5, this.y + this.r*0.8, this.x, this.y + this.r*1.6);
+          ctx.bezierCurveTo(this.x + this.r*1.5, this.y + this.r*0.8, this.x + this.r, this.y - t, this.x, this.y + this.r*0.3);
           ctx.closePath(); ctx.fill();
         }
       }
-
       class Boss {
-        constructor(){ this.size=90; this.x=canvas.width/2; this.y=canvas.height/2; this.maxHp=400; this.hp=this.maxHp; this.t=0; this.phase='burst'; }
+        constructor(){ this.size=84; this.x=canvas.width/2; this.y=canvas.height/2; this.maxHp=400; this.hp=this.maxHp; this.t=0; this.phase='burst'; }
         draw(){ ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.t*0.002); ctx.fillStyle='#0ff'; const s=this.size; ctx.fillRect(-s/2,-s/2,s,s); ctx.restore(); }
         update(dt){
           this.t+=dt;
@@ -172,10 +163,10 @@
         }
       }
 
-      // ====== UI Helpers ======
+      // ===== UI Helpers =====
       function updateHpBar(){
         const pct = Math.max(0, player.hp)/player.maxHp;
-        hpFill.style.width = `${200*Math.max(0,Math.min(1,pct))}px`;
+        hpFill.style.width = `${180*Math.max(0,Math.min(1,pct))}px`;
         hpText.textContent = `${Math.floor(player.hp)}/${Math.floor(player.maxHp)}`;
       }
       function updateBossBar(){
@@ -194,7 +185,7 @@
         }
       }
 
-      // ====== Joystick ======
+      // ===== Joystick =====
       let joyActive=false, joyCx=0, joyCy=0;
       function setStick(dx, dy){
         const len = Math.hypot(dx,dy);
@@ -231,18 +222,25 @@
       window.addEventListener('keydown', e=>keys[e.key]=true);
       window.addEventListener('keyup', e=>keys[e.key]=false);
 
-      // ====== Game Core ======
+      // ===== Core =====
+      function spawnNow(){ bullets.push(Bullet.aimedFromEdge(), Bullet.aimedFromEdge()); }
+
       function init(){
         const best = parseInt(localStorage.getItem('best')||'0',10); bestEl.textContent = best;
         player={ x: canvas.width/2, y: canvas.height/2, r:10, speed:4, hp:100, maxHp:100, color:'#ff0' };
         bullets=[]; healthPacks=[]; score=0; gameOver=false;
-        spawnIntervalMs=1000; spawnTimerMs=0; difficultyTimerMs=0;
+        spawnIntervalMs=900; spawnTimerMs=spawnIntervalMs; // first spawn asap
+        difficultyTimerMs=0;
         bossSchedule=[3000,6000,9000]; nextBossIdx=0; bossActive=false; bossTimerMs=0; bossDurationMs=15000;
         lastHealThreshold=0; lastMaxHpThreshold=0; boss=null;
+        // UI
+        mainMenu.style.display='none';
         ui.style.display='block'; canvas.style.display='block'; joystick.style.display='block'; warningDiv.style.display='none';
-        gameOverScreen.style.display='none'; mainMenu.style.display='none';
+        gameOverScreen.style.display='none';
         updateHpBar(); scoreEl.textContent='0';
         lastTime = performance.now();
+        // immediate first bullets
+        spawnNow();
       }
 
       function update(dt){
@@ -256,7 +254,7 @@
         spawnTimerMs += dt;
         if(spawnTimerMs>=spawnIntervalMs){
           spawnTimerMs-=spawnIntervalMs;
-          bullets.push(Bullet.aimedFromEdge(), Bullet.aimedFromEdge());
+          spawnNow();
         }
         // difficulty
         difficultyTimerMs += dt;
@@ -330,8 +328,7 @@
         if(score>best){ localStorage.setItem('best', score|0); bestEl.textContent = (score|0); }
       }
 
-      // ====== INITIAL UI & EVENTS ======
-      // 초기 화면
+      // Init UI
       (function initialUI(){
         mainMenu.style.display='flex';
         ui.style.display='none';
@@ -340,15 +337,15 @@
         gameOverScreen.style.display='none';
       })();
 
-      // 이벤트 연결 (반드시 DOMContentLoaded 이후)
-      btnStart.addEventListener('click', startGame, { passive: true });
-      btnRetry.addEventListener('click', () => {
+      // Events
+      btnStart.addEventListener('click', startGame, { passive:true });
+      btnRetry.addEventListener('click', ()=>{
         gameOverScreen.style.display='none';
         mainMenu.style.display='flex';
         ui.style.display='none';
         joystick.style.display='none';
         canvas.style.display='none';
-      }, { passive: true });
+      }, { passive:true });
     });
   </script>
 </body>

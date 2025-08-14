@@ -161,17 +161,26 @@
       });
     }
 
-    async function onAuthChanged(){
+    async function onAuthChanged() {
       const { data: { user } } = await supa.auth.getUser();
+      const main = document.querySelector('#mainMenu');
+      const game = document.querySelector('#gameWrap');
+      const auth = document.querySelector('#authModal'); // 기존 로그인 모달
+    
       if (user) {
-        await ensureProfile(user);
+        await ensureProfile(user);       // 닉네임#태그 1회 생성
         await fetchBestScore(user.id);
+        applyProfileUI();
+        auth.classList.add('hidden');    // 로그인 완료 → 메인 노출
+        main.classList.remove('hidden');
       } else {
-        window.currentProfile = null; window.currentBest = 0;
+        auth.classList.remove('hidden'); // 미로그인 → 로그인 모달을 첫화면으로
+        main.classList.add('hidden');
+        game.classList.add('hidden');
       }
-      applyProfileUI();
     }
-    supa.auth.onAuthStateChange(()=> onAuthChanged());
+
+    supa.auth.onAuthStateChange(() => onAuthChanged());
     onAuthChanged();
 
     $('#btnAuthClose').onclick = ()=> hide($('#authModal'));

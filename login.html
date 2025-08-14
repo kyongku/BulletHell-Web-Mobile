@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <title>로그인 — BulletHell</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    main.login { display:grid; place-items:center; padding:24px 14px; }
+    .box { width:min(92vw,480px); background:var(--card); border:1px solid var(--card-bd); border-radius:12px; padding:18px; }
+    .title { font-weight:800; margin:0 0 10px 0; }
+    .row { display:grid; gap:8px; }
+  </style>
+</head>
+<body>
+  <main class="login">
+    <div class="box">
+      <h2 class="title">로그인</h2>
+      <div class="row">
+        <label class="muted">이메일</label>
+        <input id="email" type="email" placeholder="you@example.com"/>
+        <label class="muted">비밀번호</label>
+        <input id="pass" type="password" placeholder="8자 이상"/>
+        <div class="actions">
+          <button id="btnLogin" class="primary">로그인</button>
+          <button id="btnSignup" class="secondary">회원가입</button>
+        </div>
+        <div id="msg" class="muted"></div>
+      </div>
+      <hr style="margin:14px 0; border-color:rgba(255,255,255,.1)"/>
+      <div class="row" id="nickArea" style="display:none">
+        <h3 class="title" style="font-size:18px; margin:0">닉네임 설정(최초 1회)</h3>
+        <input id="nick" type="text" maxlength="12" placeholder="예: 경구"/>
+        <button id="btnNick" class="primary">저장</button>
+        <div id="nickMsg" class="muted"></div>
+      </div>
+      <div class="actions" style="justify-content:flex-end; margin-top:10px;">
+        <a href="./index.html" class="ghost" style="text-decoration:none;"><button class="ghost">게임으로</button></a>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+    const supa = createClient('https://pecoerlqanocydrdovbb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs');
+
+    const email = document.getElementById('email');
+    const pass  = document.getElementById('pass');
+    const msg   = document.getElementById('msg');
+    const nickArea = document.getElementById('nickArea');
+    const nickInput = document.getElementById('nick');
+    const nickMsg = document.getElementById('nickMsg');
+
+    const genTag4 = () => String(Math.floor(1000 + Math.random()*9000));
+
+    async function ensureProfile(user){
+      const { data: exist } = await supa.from('profiles').select('user_id,nickname,tag').eq('user_id', user.id).maybeSingle();
+      if (exist) return true;
+      nickArea.style.display = 'grid';
+      return new Promise((resolve)=>{
+        document.getElementById('btnNick').onclick = async ()=>{
+          const name = nickInput.value.trim();
+          if (!name || name.length<2) { nickMsg.textContent='2~12자 닉네임 입력'; return; }
+          let tag=genTag4(), tries=0, ok=false;
+          while(!ok && tries<8) {
+            const { data: t } = await supa.from('profiles').select('user_id').eq('nickname', name).eq('tag', tag).maybeSingle();
+            if (!t) ok=true; else { tag = genTag4(); tries++; }
+          }
+          const { error } = await supa.from('profiles').insert([{ user_id:user.id, nickname:name, tag }]);
+          if (error) { nickMsg.textContent = '실패: '+error.message; return; }
+          resolve(true);
+        };
+      });
+    }
+
+    async function postLogin(){
+      const { data: { user } } = await supa.auth.getUser();
+      if (!user) return;
+      await ensureProfile(user);
+      location.href = './index.html';
+    }
+
+    document.getElementById('btnLogin').onclick = async ()=>{
+      msg.textContent = '로그인 중...';
+      const { error } = await supa.auth.signInWithPassword({ email: email.value, password: pass.value });
+      if (error) { msg.textContent = '실패: '+error.message; return; }
+      msg.textContent = '완료'; await postLogin();
+    };
+    document.getElementById('btnSignup').onclick = async ()=>{
+      msg.textContent = '가입 중...';
+      const { error } = await supa.auth.signUp({ email: email.value, password: pass.value });
+      if (error) { msg.textContent = '실패: '+error.message; return; }
+      msg.textContent = '가입 완료. 메일 확인 후 다시 로그인하세요.';
+    };
+
+    (async ()=>{ const { data: { user } } = await supa.auth.getUser(); if (user) location.href='./index.html'; })();
+  </script>
+</body>
+</html>

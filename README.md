@@ -1,17 +1,14 @@
-# BulletHell — Mobile (350×350) with Accounts & Ranking
-모바일 전용 버전. 조이스틱, 계정/닉네임(#태그), 랭킹(프로필+점수), 패치노트 포함.
+# BulletHell — Mobile v3 (ready, Supabase filled)
 
-## 실행
-- 깃허브에 올리고 `index.html`을 열면 바로 실행.
+## 이미 채워둔 값
+- URL: https://pecoerlqanocydrdovbb.supabase.co
+- anon key: eyJhbGciOiJI... (전체 키는 코드 상단에 포함됨)
 
-## Supabase
-- URL/Anon Key는 코드에 포함되어 있음. 필요 시 교체.
-- SQL 에디터에 `schema.sql` 내용을 실행해 테이블/정책을 만들어줘.
+## 배포
+- GitHub Pages: 이 폴더를 리포 루트에 올리고 Settings→Pages에서 main/root로 배포
+- Supabase Auth→URL Configuration
+  - Site URL: `https://<user>.github.io/<repo>/`
+  - Additional Redirect: `https://<user>.github.io/<repo>/ranking/`
 
-## 요구사항 반영
-- 350×350 캔버스 + 하단 조이스틱
-- 로그인 → 닉네임+태그 최초 1회 설정(변경 불가)
-- 메인 좌상단 프로필(닉네임#태그, 최고점 표시)
-- 죽으면 메인/랭킹 입력 선택 → 랭킹은 날짜 미표시
-- 스폰 속도: PC와 동일 증감, 12,000점 이후 고정
-- 패치노트: updates 테이블에서 최근 3개
+## 참고
+- SQL Editor에서 `schema_update.sql` 실행하면 유저별 최고점 뷰 `top_scores`가 생성됩니다.

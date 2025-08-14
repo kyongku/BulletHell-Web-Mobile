@@ -1,40 +1,27 @@
-/* Mobile-first styles for 350×350 canvas + joystick */
-:root {
-  --bg: #0b0f14;
-  --fg: #e6e6e6;
-  --muted: #94a3b8;
-  --card: #0f141b;
-  --card-bd: #1f2a37;
-  --accent: #60a5fa;
-}
-* { box-sizing: border-box; }
-html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-.hidden { display: none !important; }
-#topBar { position: sticky; top: 0; display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(12,16,20,.8); backdrop-filter: blur(8px); z-index: 10; border-bottom: 1px solid rgba(255,255,255,.08); }
-.profile { display:flex; align-items:center; gap:8px; background:transparent; border:0; color:inherit; cursor:pointer; padding:4px 6px; }
-.profile .avatar { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:#1a2332; }
-.profile .avatar.big { width:48px; height:48px; }
-.profile .who { display:flex; flex-direction:column; align-items:flex-start; line-height:1.1; }
-.profile .best { color: var(--muted); font-size: 12px; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.spacer { flex:1; }
-button { border:1px solid rgba(255,255,255,.15); background:#132033; color:#e6f4ff; padding:8px 12px; border-radius:10px; font-weight:700; cursor:pointer; }
-button.ghost { background: transparent; }
-button.secondary { background:#1a2332; }
-button.primary { background:#133552; border-color:#244566; }
-#mainMenu { padding: 24px 14px; text-align:center; }
-#mainMenu h1 { margin: 14px 0 6px 0; }
-.muted { color: var(--muted); }
-#gameWrap { display: grid; place-items: center; padding: 8px; gap: 10px; }
-#gameCanvas { width: min(96vw, 96vh); height: min(96vw, 96vh); max-width: 350px; max-height: 350px; background:#000; border-radius: 10px; border: 2px solid var(--accent); image-rendering: pixelated; box-shadow: 0 6px 22px rgba(0,0,0,.6); }
-#hudBar { display:flex; justify-content:center; align-items:center; padding: 6px 0 14px; }
-.pad { position: relative; width: 160px; height: 160px; border-radius: 50%; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.12); touch-action: none; user-select: none; }
-.stick { position:absolute; left:50%; top:50%; width:40%; height:40%; transform:translate(-50%,-50%); border-radius:50%; background:rgba(255,255,255,.25); border:2px solid rgba(255,255,255,.35); box-shadow:0 4px 12px rgba(0,0,0,.45); }
-.overlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); z-index: 20; }
-.overlay.hidden { display: none; }
-.card { width: min(92vw, 480px); background: var(--card); border:1px solid var(--card-bd); border-radius: 12px; padding: 18px; box-shadow: 0 12px 30px rgba(0,0,0,.5); }
-.row { display: grid; gap: 10px; }
-.actions { display:flex; gap:10px; justify-content:flex-end; align-items:center; }
-input[type="email"], input[type="password"], input[type="text"] { width: 100%; padding: 10px 12px; background: #0b1118; color: #e6e6e6; border: 1px solid #223047; border-radius: 8px; outline: none; font-size: 15px; }
-.patchlist .note { border-bottom: 1px solid rgba(255,255,255,.08); padding: 8px 0; }
-.patchlist .note:last-child { border-bottom: 0; }
+/* Mobile-first styles + HUD */
+:root { --bg:#0b0f14; --fg:#e6e6e6; --muted:#94a3b8; --card:#0f141b; --card-bd:#1f2a37; --accent:#60a5fa; --hp:#22c55e; --hp-bg:#133223; }
+*{box-sizing:border-box} html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.hidden{display:none!important} .muted{color:var(--muted)}
+#topBar{position:sticky;top:0;display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(12,16,20,.8);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.08)}
+.profile{display:flex;align-items:center;gap:8px;background:transparent;border:0;color:inherit;cursor:pointer;padding:4px 6px}
+.profile .avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#1a2332}
+.profile .who{display:flex;flex-direction:column;align-items:flex-start;line-height:1.1}
+.spacer{flex:1} button{border:1px solid rgba(255,255,255,.15);background:#132033;color:#e6f4ff;padding:8px 12px;border-radius:10px;font-weight:700;cursor:pointer}
+button.ghost{background:transparent} button.secondary{background:#1a2332} button.primary{background:#133552;border-color:#244566}
+#mainMenu{padding:24px 14px;text-align:center}
+
+#gameWrap{display:grid;place-items:center;padding:8px;gap:10px}
+.top-hud{display:grid;gap:6px;justify-items:center}
+.top-hud .hpbar{width:350px;height:14px;border-radius:10px;background:var(--hp-bg);border:1px solid #1d3a28;overflow:hidden}
+.top-hud .hp-fill{height:100%;background:var(--hp);}
+.top-hud .score-wrap{width:350px;text-align:right;font-variant-numeric:tabular-nums;color:#e2e8f0}
+
+#gameCanvas{width:min(96vw,96vh);height:min(96vw,96vh);max-width:350px;max-height:350px;background:#000;border-radius:10px;border:2px solid var(--accent);image-rendering:pixelated;box-shadow:0 6px 22px rgba(0,0,0,.6);margin-top:6px}
+#hudBar{display:flex;justify-content:center;align-items:center;padding:6px 0 14px}
+.pad{position:relative;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.12);touch-action:none;user-select:none}
+.stick{position:absolute;left:50%;top:50%;width:40%;height:40%;transform:translate(-50%,-50%);border-radius:50%;background:rgba(255,255,255,.25);border:2px solid rgba(255,255,255,.35);box-shadow:0 4px 12px rgba(0,0,0,.45)}
+
+.overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55);z-index:20} .overlay.hidden{display:none}
+.card{width:min(92vw,480px);background:var(--card);border:1px solid var(--card-bd);border-radius:12px;padding:18px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+.patchlist .note{border-bottom:1px solid rgba(255,255,255,.08);padding:8px 0}.patchlist .note:last-child{border-bottom:0}
+input[type="email"],input[type="password"],input[type="text"]{width:100%;padding:10px 12px;background:#0b1118;color:#e6e6e6;border:1px solid #223047;border-radius:8px;outline:none;font-size:15px}

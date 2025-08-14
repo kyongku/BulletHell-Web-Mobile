@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <title>BulletHell — Mobile (350×350)</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <header id="topBar">
+    <button id="profileBtn" class="profile">
+      <div class="avatar" id="profileAvatar" aria-hidden="true">🙂</div>
+      <div class="who">
+        <div id="profileName">로그인 필요</div>
+        <div class="best">Best: <span id="profileBest">0</span></div>
+      </div>
+    </button>
+    <div class="spacer"></div>
+    <button id="btnPatch" class="ghost">패치노트</button>
+    <button id="btnRanking" class="ghost">랭킹</button>
+  </header>
+
+  <main id="mainMenu">
+    <h1>BulletHell — Mobile</h1>
+    <p class="muted">350×350 정사각형 • 조이스틱 조작 • 계정/랭킹 지원</p>
+    <button id="btnStart" class="primary">게임 시작</button>
+  </main>
+
+  <section id="gameWrap" class="hidden">
+    <canvas id="gameCanvas" width="350" height="350"></canvas>
+    <div id="hudBar">
+      <div id="pad" class="pad" role="group" aria-label="조이스틱">
+        <div id="stick" class="stick"></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="over" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="card">
+      <h2 style="margin:0 0 6px 0;">게임 오버</h2>
+      <div class="muted">최종 점수: <span id="finalScore">0</span></div>
+      <div class="row actions">
+        <button id="btnToMenu" class="secondary">메인 화면</button>
+        <button id="btnSaveRank" class="primary">랭킹 입력</button>
+      </div>
+      <div id="saveToast" class="muted" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <div id="authModal" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">로그인</h3>
+      <label class="muted">이메일</label>
+      <input id="authEmail" type="email" placeholder="you@example.com" />
+      <label class="muted">비밀번호</label>
+      <input id="authPass" type="password" placeholder="8자 이상" />
+      <div class="row actions">
+        <button id="btnDoLogin" class="primary">로그인</button>
+        <button id="btnDoSignup" class="secondary">가입</button>
+        <button id="btnAuthClose" class="ghost">닫기</button>
+      </div>
+      <div id="authMsg" class="muted"></div>
+    </div>
+  </div>
+
+  <div id="nickModal" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">닉네임 설정</h3>
+      <p class="muted">한글/영문/숫자 2~12자. 최초 1회만 설정됩니다.</p>
+      <input id="nickInput" type="text" maxlength="12" placeholder="예: 경구" />
+      <div class="row actions">
+        <button id="btnNickSave" class="primary">저장</button>
+      </div>
+      <div id="nickMsg" class="muted"></div>
+    </div>
+  </div>
+
+  <div id="profileModal" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="card">
+      <h3 style="margin:0 0 6px 0;">프로필</h3>
+      <div class="row">
+        <div class="row">
+          <div class="avatar big" id="profileAvatarBig">🙂</div>
+          <div>
+            <div id="profNick" class="mono">-</div>
+            <div class="muted">최고 점수: <span id="profBest">0</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="row actions">
+        <button id="btnLogout" class="secondary">로그아웃</button>
+        <button id="btnProfClose" class="ghost">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="patchModal" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">패치노트</h3>
+      <div id="patchList" class="patchlist"></div>
+      <div class="row actions">
+        <button id="btnPatchClose" class="ghost">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+    const supa = createClient('https://racbwrlvquamhqbqzsix.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhY2J3cmx2cXVhbWhxYnF6c2l4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxMTM0MzMsImV4cCI6MjA2ODY4OTQzM30.pT24RRHE4oX9__fdldUT6Cic5P4MgGFk1HiIM46gXGE');
+    window.supabaseClient = supa;
+
+    window.currentProfile = null;
+    window.currentBest = 0;
+    const $ = (s)=>document.querySelector(s);
+    const show = (el)=>el.classList.remove('hidden');
+    const hide = (el)=>el.classList.add('hidden');
+    function genTag4(){ return String(Math.floor(1000 + Math.random()*9000)); }
+
+    async function fetchBestScore(user_id) {
+      const { data } = await supa.from('scores').select('score').eq('user_id', user_id).order('score', {ascending:false}).limit(1);
+      window.currentBest = (data && data[0]) ? data[0].score : 0;
+    }
+    function applyProfileUI(){
+      const profileName = $('#profileName');
+      const profileBest = $('#profileBest');
+      const profNick = $('#profNick');
+      const profBest = $('#profBest');
+      if (!window.currentProfile) {
+        profileName.textContent = '로그인 필요';
+        profileBest.textContent = '0';
+        profNick.textContent = '-';
+        profBest.textContent = '0';
+        return;
+      }
+      const nameTag = window.currentProfile.nickname + '#' + window.currentProfile.tag;
+      profileName.textContent = nameTag;
+      profileBest.textContent = String(window.currentBest||0);
+      profNick.textContent = nameTag;
+      profBest.textContent = String(window.currentBest||0);
+    }
+
+    async function ensureProfile(user){
+      const { data: exist } = await supa.from('profiles').select('user_id,nickname,tag,avatar_url').eq('user_id', user.id).maybeSingle();
+      if (exist) { window.currentProfile = exist; return; }
+      show($('#nickModal'));
+      return new Promise((resolve)=>{
+        $('#btnNickSave').onclick = async ()=>{
+          const name = $('#nickInput').value.trim();
+          if (!name || name.length < 2) { $('#nickMsg').textContent='2~12자 닉네임 입력'; return; }
+          let tag = genTag4(); let tries=0, ok=false;
+          while(!ok && tries<8){
+            const { data: t } = await supa.from('profiles').select('user_id').eq('nickname', name).eq('tag', tag).maybeSingle();
+            if (!t) ok=true; else { tag = genTag4(); tries++; }
+          }
+          const { data, error } = await supa.from('profiles').insert([{ user_id:user.id, nickname:name, tag, avatar_url:null }]).select().maybeSingle();
+          if (error) { $('#nickMsg').textContent='저장 실패: '+error.message; return; }
+          window.currentProfile = data;
+          hide($('#nickModal'));
+          resolve();
+        };
+      });
+    }
+
+    async function onAuthChanged(){
+      const { data: { user } } = await supa.auth.getUser();
+      if (user) {
+        await ensureProfile(user);
+        await fetchBestScore(user.id);
+      } else {
+        window.currentProfile = null; window.currentBest = 0;
+      }
+      applyProfileUI();
+    }
+    supa.auth.onAuthStateChange(()=> onAuthChanged());
+    onAuthChanged();
+
+    $('#btnAuthClose').onclick = ()=> hide($('#authModal'));
+    $('#btnDoLogin').onclick = async ()=>{
+      const email = $('#authEmail').value, pass = $('#authPass').value;
+      const { error } = await supa.auth.signInWithPassword({ email, password: pass });
+      $('#authMsg').textContent = error ? ('실패: '+error.message) : '완료';
+      if (!error) hide($('#authModal'));
+    };
+    $('#btnDoSignup').onclick = async ()=>{
+      const email = $('#authEmail').value, pass = $('#authPass').value;
+      const { error } = await supa.auth.signUp({ email, password: pass });
+      $('#authMsg').textContent = error ? ('실패: '+error.message) : '가입 완료. 확인 메일 확인';
+    };
+    $('#btnLogout').onclick = async ()=>{ await supa.auth.signOut(); onAuthChanged(); hide($('#profileModal')); };
+
+    $('#btnPatch').onclick = async ()=>{
+      const list = $('#patchList'); list.textContent = '불러오는 중...';
+      show($('#patchModal'));
+      const { data, error } = await supa.from('updates').select('title,content,created_at').order('created_at', {ascending:false}).limit(3);
+      if (error) { list.textContent = '불러오기 실패: '+error.message; return; }
+      list.innerHTML = data.map(u => `
+        <article class="note">
+          <h4>${u.title}</h4>
+          <div class="muted">${new Date(u.created_at).toLocaleString()}</div>
+          <p>${u.content}</p>
+        </article>
+      `).join('');
+    };
+    $('#btnPatchClose').onclick = ()=> hide($('#patchModal'));
+
+    $('#btnRanking').onclick = ()=> window.location.href = './ranking/';
+
+    $('#btnStart').onclick = async ()=>{
+      const { data: { user } } = await supa.auth.getUser();
+      if (!user) { show($('#authModal')); return; }
+      await ensureProfile(user);
+      await fetchBestScore(user.id);
+      applyProfileUI();
+      hide($('#mainMenu')); show($('#gameWrap'));
+      window.startGame && window.startGame();
+    };
+
+    $('#profileBtn').onclick = async ()=>{
+      const { data: { user } } = await supa.auth.getUser();
+      if (!user) { show($('#authModal')); return; }
+      await ensureProfile(user);
+      await fetchBestScore(user.id);
+      applyProfileUI();
+      show($('#profileModal'));
+    };
+
+    window.GameInterop = {
+      saveScore: async (score)=>{
+        const { data: { user } } = await supa.auth.getUser();
+        if (!user) return { ok:false, reason:'로그인 필요' };
+        if (!window.currentProfile) return { ok:false, reason:'프로필 없음' };
+        const payload = { user_id: user.id, score: Math.floor(score) };
+        const { error } = await supa.from('scores').insert([payload]);
+        if (error) return { ok:false, reason:error.message };
+        await fetchBestScore(user.id);
+        applyProfileUI();
+        return { ok:true };
+      }
+    };
+  </script>
+
+  <script type="module" src="./game.js"></script>
+</body>
+</html>

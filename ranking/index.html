@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <title>랭킹 — BulletHell Mobile</title>
+  <style>
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0f14; color:#e6e6e6; }
+    header { position:sticky; top:0; display:flex; gap:8px; align-items:center; padding:10px; background:rgba(12,16,20,.8); backdrop-filter:blur(8px); }
+    button { border:1px solid rgba(255,255,255,.15); background:#132033; color:#e6f4ff; padding:8px 12px; border-radius:10px; font-weight:700; cursor:pointer; }
+    .ghost { background:transparent; }
+    main { padding: 10px; }
+    .card { border:1px solid #1f2a37; background:#0f141b; border-radius:12px; padding:10px; margin:8px 0; display:flex; align-items:center; gap:10px; }
+    .avatar { width:36px; height:36px; border-radius:50%; background:#1a2332; display:grid; place-items:center; }
+    .name { font-weight:700; }
+    .score { margin-left:auto; font-variant-numeric: tabular-nums; }
+    .muted { color:#94a3b8; font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <button onclick="history.back()" class="ghost">← 뒤로</button>
+    <div style="flex:1"></div>
+    <button onclick="location.href='../'">메인</button>
+  </header>
+  <main>
+    <h2 style="margin:10px 0 4px 0;">모바일 랭킹</h2>
+    <div id="list">불러오는 중...</div>
+  </main>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+    const supa = createClient('https://racbwrlvquamhqbqzsix.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhY2J3cmx2cXVhbWhxYnF6c2l4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxMTM0MzMsImV4cCI6MjA2ODY4OTQzM30.pT24RRHE4oX9__fdldUT6Cic5P4MgGFk1HiIM46gXGE');
+
+    async function load() {
+      const list = document.getElementById('list');
+      const { data: scores, error: e1 } = await supa
+        .from('scores')
+        .select('user_id,score')
+        .order('score', { ascending:false })
+        .limit(50);
+      if (e1) { list.textContent = '불러오기 실패: '+e1.message; return; }
+      if (!scores.length) { list.textContent = '아직 점수가 없습니다.'; return; }
+      const ids = [...new Set(scores.map(s=>s.user_id))];
+
+      const { data: profs, error: e2 } = await supa
+        .from('profiles')
+        .select('user_id,nickname,tag,avatar_url')
+        .in('user_id', ids);
+      if (e2) { list.textContent = '프로필 불러오기 실패: '+e2.message; return; }
+      const pm = new Map(profs.map(p=>[p.user_id,p]));
+
+      list.innerHTML = scores.map((s,i)=>{
+        const p = pm.get(s.user_id);
+        const nameTag = p ? (p.nickname + '#' + p.tag) : 'Unknown';
+        const avatar = p && p.avatar_url ? `<img src="${p.avatar_url}" class="avatar" alt=""/>` : `<div class="avatar">🙂</div>`;
+        return `<div class="card">
+          <div class="muted" style="width:28px;text-align:right;">${i+1}</div>
+          ${avatar}
+          <div class="name">${nameTag}</div>
+          <div class="score">${s.score}</div>
+        </div>`;
+      }).join('');
+    }
+    load();
+  </script>
+</body>
+</html>

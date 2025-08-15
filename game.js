@@ -1,10 +1,10 @@
-// game.js — BulletHell Mobile (sessionStorage 세션 + 리다이렉트 루프 방지)
+// game.js — BulletHell Mobile (스킨 완전 지원 + 골드 헤더 동기화)
 // - Score: 50/sec
 // - Boss: every 3,000 score (≈1 min), stays 20s
 // - Bullets: smaller (normal 3.5 / boss 2.8), boss bullets TTL 6s
-// - Heal: missing 10% + 7, no natural despawn
+// - Heal: missing 10% + 7
 // - Growth: +10 MaxHP every 30s
-// - Gold: +10G at 20s after start, then every n minutes (CFG.goldIntervalMs)
+// - Gold: +10G at 20s after start, then every 1 min
 // - Supabase RPC: wallet_add_gold(delta)
 
 const W = 350, H = 350;
@@ -22,7 +22,7 @@ const CFG = {
   normalSpeedMult: 5,
 
   // Boss difficulty (easy)
-  bossSpeedMult: 20,   // 더 쉽고 싶으면 3.5 ~ 10 사이
+  bossSpeedMult: 20,
   bossBaseDmg: 6,
   bossDmgStep: 1,
   bossDmgEveryMs: 5000,
@@ -46,25 +46,19 @@ const CFG = {
 let supa = null;
 function ensureSupa() {
   if (supa) return supa;
-  // index.html에서 window.supabase를 전역 주입해둔 상태여야 함
   if (window.supabase && window.supabase.createClient) {
     supa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON, {
-      auth: {
-        persistSession: true,          // 같은 탭에서 페이지 이동해도 세션 유지
-        autoRefreshToken: true,
-        storage: window.sessionStorage // 자동로그인 방지(세션 한정)
-      }
+      auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage }
     });
   }
   return supa;
 }
 const sleep = (ms)=>new Promise(r=>setTimeout(r, ms));
 
-/** 리다이렉트 루프 방지: supabase 로드/세션 동기화 잠깐 기다렸다가 없으면 그때 이동 */
+/** 리다이렉트 루프 방지: supabase/세션 대기 후 없으면 login으로 */
 async function requireLoginOrRedirect(opts = {}) {
   const { retries = 8, delayMs = 120 } = opts;
 
-  // supabase 모듈 주입 대기
   if (!ensureSupa()) {
     for (let i=0;i<retries;i++){
       await sleep(delayMs);
@@ -72,18 +66,15 @@ async function requireLoginOrRedirect(opts = {}) {
     }
     if (!ensureSupa()) {
       console.error('Supabase not ready; skip redirect to avoid loop');
-      return true; // 바로 튕기면 깜빡임 루프라 일단 진행만 막음
+      return true;
     }
   }
 
-  // 세션 동기화 대기
   for (let i=0;i<retries;i++){
     const { data: { session } } = await supa.auth.getSession();
     if (session) return true;
     await sleep(delayMs);
   }
-
-  // 정말 없으면 로그인으로
   location.href = './login.html';
   return false;
 }
@@ -92,7 +83,7 @@ async function serverAddGold(n) {
   const ok = await requireLoginOrRedirect(); if (!ok) return { ok:false, reason:'not_logged_in' };
   const { data, error } = await supa.rpc('wallet_add_gold', { delta: n });
   if (error) return { ok:false, reason:error.message };
-  return { ok:true, total: data|0 };
+  return { ok:true, total: (data|0) };
 }
 async function serverGetGold(){ return serverAddGold(0); }
 
@@ -216,23 +207,79 @@ function bossSpiral(cx, cy, step, count, speed, clr){
   }
 }
 
-//////////////////// Skin Painter ////////////////////
+//////////////////// Skin Painter (확장) ////////////////////
 let cachedSkinId = null, painter = makePainter('white');
+
+function makeStripePattern(ctx, colors, angleDeg = 45, stripe = 8) {
+  const off = document.createElement('canvas');
+  off.width = off.height = stripe * 2;
+  const octx = off.getContext('2d');
+
+  octx.save();
+  octx.translate(off.width/2, off.height/2);
+  octx.rotate(angleDeg * Math.PI/180);
+  octx.translate(-off.width/2, -off.height/2);
+
+  octx.fillStyle = colors[0];
+  octx.fillRect(0, 0, off.width, off.height);
+  octx.fillStyle = colors[1];
+  octx.fillRect(0, 0, off.width, stripe);
+
+  octx.restore();
+  return ctx.createPattern(off, 'repeat');
+}
+function makeGradient(ctx, type, stops) {
+  let g;
+  if (type === 'h') g = ctx.createLinearGradient(0, 0, 20, 0);
+  else              g = ctx.createLinearGradient(0, 0, 0, 20);
+  for (const [pos, color] of stops) g.addColorStop(pos, color);
+  return g;
+}
 function makePainter(id){
   return function(){
-    ctx.save(); ctx.translate(state.player.x, state.player.y);
-    ctx.beginPath(); ctx.arc(0,0,state.player.r,0,Math.PI*2);
-    switch(id){
-      case 'white': ctx.fillStyle='#fff'; break;
-      case 'mint': ctx.fillStyle='#7ef5d1'; break;
-      case 'sky': ctx.fillStyle='#7ecbff'; break;
-      case 'lime': ctx.fillStyle='#a6ff6b'; break;
-      case 'orange': ctx.fillStyle='#ffb36b'; break;
-      case 'violet': ctx.fillStyle='#ba8bff'; break;
-      case 'aqua': ctx.fillStyle='#6bfffb'; break;
-      default: ctx.fillStyle='#ffffff';
+    const r = state.player.r;
+    ctx.save();
+    ctx.translate(state.player.x, state.player.y);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI*2);
+
+    const solid = {
+      white:'#ffffff', mint:'#7ef5d1', sky:'#7ecbff', lime:'#a6ff6b',
+      orange:'#ffb36b', violet:'#ba8bff', aqua:'#6bfffb'
+    };
+    if (solid[id]) {
+      ctx.fillStyle = solid[id];
+    } else {
+      switch(id){
+        case 'stripe-mint-sky':
+          ctx.fillStyle = makeStripePattern(ctx, ['#7ef5d1','#7ecbff'], 45, 8); break;
+        case 'stripe-orange-violet':
+          ctx.fillStyle = makeStripePattern(ctx, ['#ffb36b','#ba8bff'], 45, 8); break;
+        case 'stripe-gold-silver':
+          ctx.fillStyle = makeStripePattern(ctx, ['#ffd700','#c0c0c0'], 45, 8); break;
+        case 'grad-sunrise':
+          ctx.fillStyle = makeGradient(ctx, 'h', [
+            [0.00,'#ff9a9e'], [0.50,'#fad0c4'], [1.00,'#ffd1ff']
+          ]); break;
+        case 'grad-sea':
+          ctx.fillStyle = makeGradient(ctx, 'h', [
+            [0.00,'#36d1dc'], [1.00,'#5b86e5']
+          ]); break;
+        case 'grad-sunset':
+          ctx.fillStyle = makeGradient(ctx, 'h', [
+            [0.00,'#0b486b'], [1.00,'#f56217']
+          ]); break;
+        case 'god-rainbow':
+          ctx.fillStyle = makeGradient(ctx, 'h', [
+            [0.00,'red'], [0.17,'orange'], [0.34,'yellow'],
+            [0.51,'green'], [0.68,'blue'], [0.85,'indigo'], [1.00,'violet']
+          ]); break;
+        default:
+          ctx.fillStyle = '#ffffff';
+      }
     }
-    ctx.fill(); ctx.restore();
+    ctx.fill();
+    ctx.restore();
   };
 }
 
@@ -245,9 +292,13 @@ async function grantGold(amount){
   updateHUD();
   const t = document.getElementById('saveToast');
   if (t){ t.textContent = `+${amount} Gold`; setTimeout(()=>t.textContent='', 1500); }
+
+  // ★ 헤더 Gold 즉시 반영
+  const g = document.getElementById('goldText');
+  if (g) g.textContent = state.gold;
 }
 
-//////////////////// Game Logic ////////////////////
+//////////////////// Game State ////////////////////
 const state = {
   run: false, over: false, time: 0, score: 0, maxHP: 100,
   player: { x: W / 2, y: H * 0.85, r: 7, speed: 170, hp: 100 },
@@ -298,7 +349,6 @@ function updateBoss(dt){
   const t = state.boss.t;
   const phase2 = (t >= 10000);
 
-  // Easy: alternate ring/spiral, slow cadence
   const cycle = phase2 ? 750 : 900;
   if (Math.floor(t/cycle) !== Math.floor(prev/cycle)){
     if ((state.boss.toggle++ % 2) === 0){
@@ -345,7 +395,7 @@ function update(dt){
     state.diffT += dt*1000;
     if (state.spawnT >= state.spawnMs){
       state.spawnT -= state.spawnMs;
-      state.bullets.push(Bullet.aimedFromEdge(state.player.x, state.player.y, state.score)); // 한 발만
+      state.bullets.push(Bullet.aimedFromEdge(state.player.x, state.player.y, state.score));
     }
     if (state.diffT >= 4800){
       state.diffT -= 4800;
@@ -377,7 +427,7 @@ function update(dt){
   // score & timed gold
   state.score += CFG.scorePerSec * dt;
   while (state.time >= state.nextGoldTime){
-    grantGold(CFG.goldPerPayout);      // async, 루프는 다음 tick에서 계속
+    grantGold(CFG.goldPerPayout);      // async
     state.nextGoldTime += state.goldInterval;
   }
 
@@ -393,7 +443,7 @@ function draw(){
   ctx.fillRect(0,0,W,4); ctx.fillRect(0,0,4,H);
   ctx.fillRect(W-4,0,4,H); ctx.fillRect(0,H-4,W,4);
 
-  // player
+  // player (스킨 적용)
   const skinId = (window.GameConfig && window.GameConfig.selectedSkin) ? window.GameConfig.selectedSkin : 'white';
   if (skinId !== cachedSkinId){ painter = makePainter(skinId); cachedSkinId = skinId; }
   painter();
@@ -420,37 +470,31 @@ function loop(ts){
   if (state.run) raf = requestAnimationFrame(loop);
 }
 async function loadGoldAtStart(){
-  const g = await fetchGold();
-  state.gold = g;
+  const res = await serverGetGold().catch(()=>null);
+  if (res && res.ok) { state.gold = res.total|0; }
   updateHUD();
   const el = document.getElementById('goldText');
-  if (el) el.textContent = g;
+  if (el) el.textContent = state.gold;
 }
 async function startGame(){
   const ok = await requireLoginOrRedirect();
   if (!ok) return;
 
-  const over=document.getElementById('over');
-  const menu=document.getElementById('mainMenu');
-  const wrap=document.getElementById('gameWrap');
-  if (over) over.classList.add('hidden');
-  if (menu) menu.classList.add('hidden');
-  if (wrap) wrap.classList.remove('hidden');
+  document.getElementById('over')?.classList.add('hidden');
+  document.getElementById('mainMenu')?.classList.add('hidden');
+  document.getElementById('gameWrap')?.classList.remove('hidden');
 
   reset(); last=0; cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
   loadGoldAtStart();
 }
 window.startGame = startGame;
 
-const btnToMenu = document.getElementById('btnToMenu');
-if (btnToMenu) btnToMenu.addEventListener('click', () => {
+document.getElementById('btnToMenu')?.addEventListener('click', () => {
   document.getElementById('gameWrap')?.classList.add('hidden');
   document.getElementById('mainMenu')?.classList.remove('hidden');
   document.getElementById('over')?.classList.add('hidden');
 });
-
-const btnSaveRank = document.getElementById('btnSaveRank');
-if (btnSaveRank) btnSaveRank.addEventListener('click', async () => {
+document.getElementById('btnSaveRank')?.addEventListener('click', async () => {
   const ok = await requireLoginOrRedirect(); if (!ok) return;
   const saver = window.GameInterop && window.GameInterop.saveScore;
   if (!saver) return;

@@ -1,13 +1,14 @@
-// game.js — BulletHell Mobile (JS-only 통합본)
+// game.js — BulletHell Mobile (JS-only 통합본; 로그인 강제 버전)
 // - Score: 50/sec
 // - Boss: every 3,000 score (≈1 min), stays 20s, easy pattern, no overlap
 // - Bullets: smaller (normal 3.5 / boss 2.8), boss bullets TTL 6s
 // - Heal: missing 10% + 7, no natural despawn
 // - Growth: +10 MaxHP every 30s
 // - Gold: +10G at 20s after start, then every n minutes (CFG.goldIntervalMs)
-// - Supabase: wallet_add_gold(delta) RPC로 계정별 골드 저장/로드 (JS만으로 동작)
+// - Supabase: wallet_add_gold(delta) RPC로 계정별 골드 저장/로드
+// - 새로고침 시 자동로그인 금지(persistSession:false). 세션 없으면 login.html로 튕김.
 
-//////////////////// CFG ////////////////////
+// ============== CFG ==============
 const W = 350, H = 350;
 const CFG = {
   // HP & heal
@@ -23,7 +24,7 @@ const CFG = {
   normalSpeedMult: 5,
 
   // Boss difficulty (easy)
-  bossSpeedMult: 20,   // <= 더 낮추려면 3.5 추천
+  bossSpeedMult: 20,   // 더 느리게 하려면 3.5~8 추천
   bossBaseDmg: 6,
   bossDmgStep: 1,
   bossDmgEveryMs: 5000,
@@ -38,12 +39,12 @@ const CFG = {
   goldIntervalMs: 60000, // n minutes (1 min default)
   goldPerPayout: 10,
 
-  // Supabase (이미 index.html에 supabase-js CDN이 있으면 자동 사용)
+  // Supabase
   SUPABASE_URL: "https://pecoerlqanocydrdovbb.supabase.co",
   SUPABASE_ANON: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs"
 };
 
-//////////////////// Canvas & Input ////////////////////
+// ============== Canvas & Input ==============
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -86,7 +87,7 @@ function inputAxis() {
   return { x: dx, y: dy };
 }
 
-//////////////////// HUD Handles ////////////////////
+// ============== HUD Handles ==============
 const hpFill = document.getElementById('hpFill');
 const hpText = document.getElementById('hpText');
 const liveScore = document.getElementById('liveScore');
@@ -101,14 +102,35 @@ function getGoldEl() {
 }
 let goldText = getGoldEl();
 
-//////////////////// Supabase Helpers ////////////////////
+// ============== Supabase (로그인 강제; 자동로그인 금지) ==============
 let supa = null;
 function ensureSupa() {
   if (supa) return supa;
   if (window.supabase && window.supabase.createClient) {
-    supa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON);
+    // ★ 중요: persistSession:false + autoRefreshToken:false + sessionStorage(혹시라도 쓸 때)
+    supa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        storage: window.sessionStorage
+      }
+    });
   }
   return supa;
+}
+async function getSession() {
+  const s = ensureSupa(); if (!s) return null;
+  const { data: { session } } = await s.auth.getSession();
+  return session || null;
+}
+async function requireLoginOrRedirect() {
+  const sess = await getSession();
+  if (!sess) {
+    // 게임 페이지에서 세션 없으면 로그인 화면으로
+    try { location.href = './login.html'; } catch(_) {}
+    return false;
+  }
+  return true;
 }
 async function serverUser() {
   const s = ensureSupa(); if (!s) return null;
@@ -116,20 +138,21 @@ async function serverUser() {
   return user || null;
 }
 async function serverAddGold(n) {
+  // 로그인 필수. 없으면 저장 안 함.
+  const ok = await requireLoginOrRedirect();
+  if (!ok) return { ok:false, reason:'not_logged_in' };
   const s = ensureSupa(); if (!s) return { ok:false, reason:'no_supabase' };
-  const user = await serverUser(); if (!user) return { ok:false, reason:'not_logged_in' };
   const { data, error } = await s.rpc('wallet_add_gold', { delta: n });
   if (error) return { ok:false, reason:error.message };
   return { ok:true, total: data|0 };
 }
 async function serverGetGold() {
-  // RPC delta 0 → 현재 total 반환
-  const res = await serverAddGold(0);
-  if (!res.ok) return res;
-  return { ok:true, total: res.total|0 };
+  const ok = await requireLoginOrRedirect();
+  if (!ok) return { ok:false, reason:'not_logged_in' };
+  return serverAddGold(0);
 }
 
-//////////////////// State ////////////////////
+// ============== State ==============
 const state = {
   run: false, over: false, time: 0, score: 0, maxHP: 100,
   player: { x: W / 2, y: H * 0.85, r: 7, speed: 170, hp: 100 },
@@ -154,7 +177,7 @@ function updateHUD() {
   if (goldText) goldText.textContent = state.gold;
 }
 
-//////////////////// Objects ////////////////////
+// ============== Objects ==============
 class Bullet {
   constructor(x, y, vx, vy, r, clr, dmg, isBoss=false, ttlMs=isBoss?6000:null) {
     this.x=x; this.y=y; this.vx=vx; this.vy=vy; this.r=r; this.clr=clr; this.dmg=dmg; this.isBoss=isBoss;
@@ -182,7 +205,7 @@ class Heal {
   expired(){ return false; }
 }
 
-//////////////////// Boss Patterns ////////////////////
+// ============== Boss Patterns ==============
 function bossDmg() {
   const step = Math.floor(state.boss.t / CFG.bossDmgEveryMs);
   return CFG.bossBaseDmg + step * CFG.bossDmgStep;
@@ -206,7 +229,7 @@ function bossSpiral(cx, cy, step, count, speed, clr){
   }
 }
 
-//////////////////// Skin Painter ////////////////////
+// ============== Skin Painter ==============
 let cachedSkinId = null, painter = makePainter('white');
 function makePainter(id){
   return function(){
@@ -226,21 +249,19 @@ function makePainter(id){
   };
 }
 
-//////////////////// Gold Utils ////////////////////
+// ============== Gold Utils ==============
 async function grantGold(amount){
-  let total = null;
-  try {
-    const res = await serverAddGold(amount);
-    if (res && res.ok && typeof res.total === 'number') total = res.total|0;
-  } catch(_) {}
-  if (total === null) total = (state.gold|0) + amount; // fallback(로그인X/오프라인)
-  state.gold = total;
+  // 로그인 안 되어 있으면 여기서 바로 login.html로 튕긴다(requireLoginOrRedirect 내부)
+  const res = await serverAddGold(amount);
+  if (res && res.ok && typeof res.total === 'number') {
+    state.gold = res.total|0;
+  }
   updateHUD();
   const t = document.getElementById('saveToast');
   if (t){ t.textContent = `+${amount} Gold`; setTimeout(()=>t.textContent='', 1500); }
 }
 
-//////////////////// Game Logic ////////////////////
+// ============== Game Logic ==============
 function reset(){
   state.run=true; state.over=false; state.time=0; state.score=0; state.maxHP=100;
   state.player = { x: W/2, y: H*0.85, r: 7, speed: 170, hp: state.maxHP };
@@ -357,7 +378,8 @@ function update(dt){
   // score & timed gold
   state.score += CFG.scorePerSec * dt;
   while (state.time >= state.nextGoldTime){
-    grantGold(CFG.goldPerPayout);      // async, 루프는 다음 tick에서 계속
+    // 로그인 없으면 내부에서 login.html로 튕김
+    grantGold(CFG.goldPerPayout);
     state.nextGoldTime += state.goldInterval;
   }
 
@@ -365,15 +387,7 @@ function update(dt){
   if (state.player.hp <= 0) gameOver();
 }
 
-//////////////////// Draw ////////////////////
-function stripePattern(colors){
-  const off=document.createElement('canvas'); off.width=16; off.height=16;
-  const c=off.getContext('2d');
-  c.fillStyle=colors[0]; c.fillRect(0,0,16,16);
-  c.fillStyle=colors[1]; c.beginPath();
-  c.moveTo(0,8); c.lineTo(8,0); c.lineTo(16,8); c.lineTo(8,16); c.closePath(); c.fill();
-  return ctx.createPattern(off,'repeat');
-}
+// ============== Draw ==============
 function draw(){
   ctx.clearRect(0,0,W,H);
   // border
@@ -400,28 +414,33 @@ function draw(){
   }
 }
 
-//////////////////// Loop & Buttons ////////////////////
+// ============== Loop & Buttons ==============
 let last=0, raf=0;
 function loop(ts){
   const dt = Math.min(0.05, (ts - (last || ts))/1000);
   last = ts; update(dt); draw();
   if (state.run) raf = requestAnimationFrame(loop);
 }
+
 async function loadGoldAtStart(){
+  // 로그인 없으면 여기서 login.html로 이동됨
   const res = await serverGetGold().catch(()=>null);
-  if (res && res.ok) { state.gold = res.total|0; updateHUD(); }
-  else {
-    const t = document.getElementById('saveToast');
-    if (t) { t.textContent = 'Login to save gold'; setTimeout(()=>t.textContent='', 2000); }
-  }
+  if (res && res.ok) { state.gold = res.total|0; }
+  updateHUD();
 }
-function startGame(){
+
+async function startGame(){
+  // 세션 확인. 없으면 로그인으로 이동(위에서 튕김)
+  const ok = await requireLoginOrRedirect();
+  if (!ok) return;
+
   const over=document.getElementById('over');
   const menu=document.getElementById('mainMenu');
   const wrap=document.getElementById('gameWrap');
   if (over) over.classList.add('hidden');
   if (menu) menu.classList.add('hidden');
   if (wrap) wrap.classList.remove('hidden');
+
   reset(); last=0; cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
   loadGoldAtStart(); // 서버에서 현재 골드 로드
 }
@@ -436,6 +455,10 @@ if (btnToMenu) btnToMenu.addEventListener('click', () => {
 
 const btnSaveRank = document.getElementById('btnSaveRank');
 if (btnSaveRank) btnSaveRank.addEventListener('click', async () => {
+  // 세션 없으면 여기서도 로그인 화면으로 튕김
+  const ok = await requireLoginOrRedirect();
+  if (!ok) return;
+
   const saver = window.GameInterop && window.GameInterop.saveScore;
   if (!saver) return;
   const res = await saver(state.score);

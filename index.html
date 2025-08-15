@@ -156,6 +156,16 @@
 
       await ensureProfile(user);
       await loadProfile(user);
+      // RPC에서 현재 총 골드 읽어와서 profiles/헤더에 반영
+      try {
+        const { data: total, error: terr } = await supa.rpc('wallet_add_gold', { delta: 0 });
+        if (!terr && typeof total === 'number') {
+          // DB profiles.gold 업데이트 (표시 일관성)
+          await supa.from('profiles').update({ gold: total }).eq('user_id', currentUser.id);
+          profile.gold = total;
+        }
+      } catch (_) {}
+
       await fetchBestScore(user.id);
       applyHeaderUI();
       buildSkinGrid();

@@ -12,6 +12,10 @@
       background: rgba(0,0,0,.7); color: #e6e6e6; z-index: 9999;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
+    /* 프로필 모달 하단 버튼 좌/우 배치 */
+    #profileModal .row.actions {
+      display: flex; justify-content: space-between; align-items: center;
+    }
   </style>
 </head>
 <body>
@@ -74,7 +78,7 @@
     <div class="card">
       <h3 style="margin:0 0 8px 0;">닉네임 설정</h3>
       <p class="muted">한글/영문/숫자 2~12자. 최초 1회만 설정.</p>
-      <input id="nickInput" type="text" maxlength="12" placeholder="예: 홍길동" />
+      <input id="nickInput" type="text" maxlength="12" placeholder="예: 경구" />
       <div class="row actions">
         <button id="btnNickSave" class="primary">저장</button>
       </div>
@@ -89,6 +93,7 @@
       <div class="muted" id="profInfo">닉네임 / 최고점 / Gold</div>
       <h4 style="margin:10px 0 6px 0;">스킨 선택</h4>
       <div id="skinGrid" class="skin-grid"></div>
+      <!-- 하단: 닫기(왼쪽) / 로그아웃(오른쪽) -->
       <div class="row actions" style="margin-top:10px;">
         <button id="btnProfileClose" class="ghost">닫기</button>
         <button id="btnLogout" class="secondary">로그아웃</button>
@@ -138,13 +143,13 @@
     const $ = (s)=>document.querySelector(s);
     const show = (el)=>el.classList.remove('hidden');
     const hide = (el)=>el.classList.add('hidden');
+    const genTag4 = () => String(Math.floor(1000 + Math.random()*9000));
 
     let currentUser = null, profile = null, bestScore = 0;
 
     // ---------- 로그인 확인 & 초기화 ----------
     (async () => {
-      // 약간의 지연으로 모듈/세션 동기화 대기
-      await new Promise(r=>setTimeout(r, 60));
+      await new Promise(r=>setTimeout(r, 60)); // 모듈/세션 동기화 대기
       const { data: { user } } = await supa.auth.getUser();
       if (!user) { location.href = './login.html'; return; }  // 미로그인 → 로그인 페이지
       currentUser = user;
@@ -157,72 +162,41 @@
       window.GameConfig = { get selectedSkin(){ return profile?.selected_skin || 'white'; } };
 
       // UI 표시
-      $('#authGate').remove();
-      show($('#topBar')); show($('#mainMenu'));
+      document.getElementById('authGate')?.remove();
+      show(document.getElementById('topBar'));
+      show(document.getElementById('mainMenu'));
     })();
 
-    // ---------- 나머지 유틸/가챠/프로필/버튼 로직은 기존과 동일 ----------
-    const genTag4 = () => String(Math.floor(1000 + Math.random()*9000));
+    // ---------- 스킨/가챠 데이터 ----------
     const ALL_SKINS = [
+      // N
       { id:'white', name:'White', grade:'N' },{ id:'mint', name:'Mint', grade:'N' },
       { id:'sky', name:'Sky', grade:'N' },{ id:'lime', name:'Lime', grade:'N' },
       { id:'orange', name:'Orange', grade:'N' },{ id:'violet', name:'Violet', grade:'N' },
       { id:'aqua', name:'Aqua', grade:'N' },
+      // R
       { id:'stripe-mint-sky', name:'Stripe Mint/Sky', grade:'R' },
       { id:'stripe-orange-violet', name:'Stripe Orange/Violet', grade:'R' },
+      // E
       { id:'grad-sunrise', name:'Grad Sunrise', grade:'E' },
-      { id:'grad-sea', name:'Grad Sea', grade:'E' },
+      { id:'grad-sea',     name:'Grad Sea',     grade:'E' },
+      // L
       { id:'stripe-gold-silver', name:'Stripe Gold/Silver', grade:'L' },
-      { id:'grad-sunset', name:'Grad Sunset', grade:'L' },
+      { id:'grad-sunset',        name:'Grad Sunset',        grade:'L' },
+      // GOD
       { id:'god-rainbow', name:'GOD Rainbow', grade:'GOD' }
     ];
     const GRADE_POOL = [
       { grade:'GOD', p:0.005, skins:ALL_SKINS.filter(s=>s.grade==='GOD') },
-      { grade:'L', p:0.02, skins:ALL_SKINS.filter(s=>s.grade==='L') },
-      { grade:'E', p:0.075, skins:ALL_SKINS.filter(s=>s.grade==='E') },
-      { grade:'R', p:0.20, skins:ALL_SKINS.filter(s=>s.grade==='R') },
-      { grade:'N', p:0.70, skins:ALL_SKINS.filter(s=>s.grade==='N') },
+      { grade:'L',   p:0.02,  skins:ALL_SKINS.filter(s=>s.grade==='L') },
+      { grade:'E',   p:0.075, skins:ALL_SKINS.filter(s=>s.grade==='E') },
+      { grade:'R',   p:0.20,  skins:ALL_SKINS.filter(s=>s.grade==='R') },
+      { grade:'N',   p:0.70,  skins:ALL_SKINS.filter(s=>s.grade==='N') },
     ];
-    function pickGacha(){ const r=Math.random(); let acc=0; for(const g of GRADE_POOL){ acc+=g.p; if(r<=acc){ const arr=g.skins; return { grade:g.grade, skin:arr[Math.floor(Math.random()*arr.length)] }; } } const last=GRADE_POOL.at(-1); return { grade:last.grade, skin:last.skins[0] }; }
-
-    async function ensureProfile(user){
-      const { data: p } = await supa.from('profiles').select('*').eq('user_id', user.id).maybeSingle();
-      if (p) return;
-      show($('#nickModal'));
-      await new Promise(resolve=>{
-        $('#btnNickSave').onclick = async ()=>{
-          const name = $('#nickInput').value.trim();
-          if (!name || name.length < 2) { $('#nickMsg').textContent = '2~12자 닉네임 입력'; return; }
-          let tag = genTag4(), tries=0, ok=false;
-          while(!ok && tries<8){
-            const { data:t } = await supa.from('profiles').select('user_id').eq('nickname', name).eq('tag', tag).maybeSingle();
-            if (!t) ok = true; else { tag = genTag4(); tries++; }
-          }
-          const row = { user_id: user.id, nickname: name, tag, gold: 0, selected_skin: 'white', unlocked_skins: ['white'] };
-          const { error } = await supa.from('profiles').insert([row]);
-          if (error){ $('#nickMsg').textContent = '실패: '+error.message; return; }
-          hide($('#nickModal')); resolve();
-        };
-      });
-    }
-    async function loadProfile(user){
-      const { data } = await supa.from('profiles').select('*').eq('user_id', user.id).maybeSingle();
-      profile = data || {};
-      const patch = {};
-      if (profile.gold == null) patch.gold = 0;
-      if (!profile.selected_skin) patch.selected_skin = 'white';
-      if (!Array.isArray(profile.unlocked_skins)) patch.unlocked_skins = ['white'];
-      if (Object.keys(patch).length){ await supa.from('profiles').update(patch).eq('user_id', user.id); Object.assign(profile, patch); }
-    }
-    async function fetchBestScore(uid){
-      const { data } = await supa.from('scores').select('score').eq('user_id', uid).order('score', {ascending:false}).limit(1);
-      bestScore = (data && data[0]) ? data[0].score : 0;
-    }
-    function applyHeaderUI(){
-      const nameTag = (profile.nickname||'user') + '#' + (profile.tag||'0000');
-      document.getElementById('profileName').textContent = nameTag;
-      document.getElementById('profileBest').textContent = String(bestScore||0);
-      document.getElementById('goldText').textContent = profile.gold ?? 0;
+    function pickGacha(){
+      const r=Math.random(); let acc=0;
+      for(const g of GRADE_POOL){ acc+=g.p; if(r<=acc){ const arr=g.skins; return { grade:g.grade, skin:arr[Math.floor(Math.random()*arr.length)] }; } }
+      const last=GRADE_POOL.at(-1); return { grade:last.grade, skin:last.skins[0] };
     }
     function gradeBadge(g){ const map={N:'N', R:'R', E:'E', L:'L', GOD:'G'}; return `<span class="badge g-${g}">${map[g]||g}</span>`; }
     function previewCSS(id){
@@ -239,33 +213,86 @@
         default: return '#ffffff';
       }
     }
+
+    // ---------- 프로필/스킨 UI ----------
     function buildSkinGrid(){
       const grid = document.getElementById('skinGrid');
       const have = new Set(profile.unlocked_skins||['white']);
-      grid.innerHTML = [
-        'white','mint','sky','lime','orange','violet','aqua',
-        'stripe-mint-sky','stripe-orange-violet','grad-sunrise','grad-sea','stripe-gold-silver','grad-sunset','god-rainbow'
-      ].map(id=>{
-        const owned = have.has(id), sel = profile.selected_skin===id;
-        const name = id.replace(/-/g,' ');
-        return `<button class="chip ${owned?'':'chip-lock'} ${sel?'chip-sel':''}" data-id="${id}">
-          <span class="chip-color" data-skin="${id}"></span><span>${name}</span>${gradeBadge(
-            id.startsWith('god')?'GOD':id.startsWith('grad')?'E':id.startsWith('stripe-gold')||id==='grad-sunset'?'L':id.startsWith('stripe')?'R':'N'
-          )}
-        </button>`;
+      grid.innerHTML = ALL_SKINS.map(s=>{
+        const owned = have.has(s.id);
+        const sel = profile.selected_skin === s.id;
+        return `
+          <button class="chip ${owned?'':'chip-lock'} ${sel?'chip-sel':''}" data-id="${s.id}">
+            <span class="chip-color" data-skin="${s.id}"></span>
+            <span>${s.name}</span>
+            ${gradeBadge(s.grade)}
+          </button>`;
       }).join('');
-      grid.querySelectorAll('.chip').forEach(btn=>{
+      grid.querySelectorAll('button.chip').forEach(btn=>{
         btn.onclick = async ()=>{
           const id = btn.getAttribute('data-id');
-          if (!have.has(id) || profile.selected_skin === id) return;
+          if (!have.has(id)) return;
+          if (profile.selected_skin === id) return;
           const { error } = await supa.from('profiles').update({ selected_skin:id }).eq('user_id', profile.user_id);
           if (!error){ profile.selected_skin = id; buildSkinGrid(); }
         };
       });
-      grid.querySelectorAll('.chip-color').forEach(span=>{ span.style.background = previewCSS(span.getAttribute('data-skin')); });
+      grid.querySelectorAll('.chip-color').forEach(span=>{
+        const id = span.getAttribute('data-skin');
+        span.style.background = previewCSS(id);
+      });
+    }
+    function updateProfileModalUI(){
+      document.getElementById('profInfo').textContent =
+        `${profile.nickname}#${profile.tag} / Best ${bestScore} / Gold ${profile.gold}`;
     }
 
-    // 버튼들
+    // ---------- 계정/베스트스코어 ----------
+    async function ensureProfile(user){
+      const { data: p } = await supa.from('profiles').select('*').eq('user_id', user.id).maybeSingle();
+      if (p) return;
+      document.getElementById('nickModal').classList.remove('hidden');
+      await new Promise(resolve=>{
+        document.getElementById('btnNickSave').onclick = async ()=>{
+          const name = document.getElementById('nickInput').value.trim();
+          if (!name || name.length < 2) { document.getElementById('nickMsg').textContent = '2~12자 닉네임 입력'; return; }
+          let tag = genTag4(), tries=0, ok=false;
+          while(!ok && tries<8){
+            const { data:t } = await supa.from('profiles').select('user_id').eq('nickname', name).eq('tag', tag).maybeSingle();
+            if (!t) ok = true; else { tag = genTag4(); tries++; }
+          }
+          const row = { user_id: user.id, nickname: name, tag, gold: 0, selected_skin: 'white', unlocked_skins: ['white'] };
+          const { error } = await supa.from('profiles').insert([row]);
+          if (error){ document.getElementById('nickMsg').textContent = '실패: '+error.message; return; }
+          document.getElementById('nickModal').classList.add('hidden');
+          resolve();
+        };
+      });
+    }
+    async function loadProfile(user){
+      const { data } = await supa.from('profiles').select('*').eq('user_id', user.id).maybeSingle();
+      profile = data || {};
+      const patch = {};
+      if (profile.gold == null) patch.gold = 0;
+      if (!profile.selected_skin) patch.selected_skin = 'white';
+      if (!Array.isArray(profile.unlocked_skins)) patch.unlocked_skins = ['white'];
+      if (Object.keys(patch).length){
+        await supa.from('profiles').update(patch).eq('user_id', user.id);
+        Object.assign(profile, patch);
+      }
+    }
+    async function fetchBestScore(uid){
+      const { data } = await supa.from('scores').select('score').eq('user_id', uid).order('score', {ascending:false}).limit(1);
+      bestScore = (data && data[0]) ? data[0].score : 0;
+    }
+    function applyHeaderUI(){
+      const nameTag = (profile.nickname||'user') + '#' + (profile.tag||'0000');
+      document.getElementById('profileName').textContent = nameTag;
+      document.getElementById('profileBest').textContent = String(bestScore||0);
+      document.getElementById('goldText').textContent = profile.gold ?? 0;
+    }
+
+    // ---------- 버튼들 ----------
     document.getElementById('btnRanking').onclick = ()=> location.href='./ranking/';
     document.getElementById('btnPatch').onclick = async ()=>{
       document.getElementById('patchList').textContent='불러오는 중...';
@@ -276,38 +303,50 @@
           <h4>${u.title}</h4>
           <div class="muted">${new Date(u.created_at).toLocaleString()}</div>
           <p>${u.content}</p>
-        </article>`).join('');
+        </article>
+      `).join('');
       document.getElementById('patchModal').classList.remove('hidden');
     };
     document.getElementById('btnPatchClose').onclick = ()=> document.getElementById('patchModal').classList.add('hidden');
+
     document.getElementById('btnStart').onclick = ()=>{
       document.getElementById('mainMenu').classList.add('hidden');
       document.getElementById('gameWrap').classList.remove('hidden');
       window.startGame && window.startGame();
     };
+
     document.getElementById('profileBtn').onclick = ()=>{
-      document.getElementById('profInfo').textContent =
-        `${profile.nickname}#${profile.tag} / Best ${bestScore} / Gold ${profile.gold}`;
+      updateProfileModalUI();
       document.getElementById('profileModal').classList.remove('hidden');
     };
     document.getElementById('btnProfileClose').onclick = ()=> document.getElementById('profileModal').classList.add('hidden');
+
+    // 로그아웃(프로필 모달 오른쪽 아래)
+    document.getElementById('btnLogout').onclick = async ()=>{
+      try { await supa.auth.signOut(); } catch(_){}
+      sessionStorage.clear();
+      location.href = './login.html';
+    };
+
     document.getElementById('btnGacha').onclick = ()=>{
       document.getElementById('gachaResult').textContent = '';
       document.getElementById('gachaModal').classList.remove('hidden');
     };
     document.getElementById('btnGachaClose').onclick = ()=> document.getElementById('gachaModal').classList.add('hidden');
     document.getElementById('btnDoGacha').onclick = async ()=>{
-      if ((profile.gold ?? 0) < 100){ document.getElementById('gachaResult').textContent = 'Gold가 부족합니다.'; return; }
-      const r = (Math.random()*100)|0; // 실제 확률은 pickGacha() 사용 권장
-      const { grade, skin } = (function(){ return (function pick(){ const r=Math.random(); let acc=0; for(const g of GRADE_POOL){ acc+=g.p; if(r<=acc){ const arr=g.skins; return { grade:g.grade, skin:arr[Math.floor(Math.random()*arr.length)] }; } } const last=GRADE_POOL.at(-1); return { grade:last.grade, skin:last.skins[0] }; })(); })();
+      if ((profile.gold ?? 0) < 100){
+        document.getElementById('gachaResult').textContent = 'Gold가 부족합니다.';
+        return;
+      }
+      const { grade, skin } = pickGacha();
       const newGold = (profile.gold ?? 0) - 100;
-      const set = new Set(profile.unlocked_skins || []); set.add(skin.id);
-      const updates = { gold:newGold, unlocked_skins:[...set] };
+      const set = new Set(profile.unlocked_skins || []);
+      set.add(skin.id);
+      const updates = { gold:newGold, unlocked_skins:Array.from(set) };
       const { error } = await supa.from('profiles').update(updates).eq('user_id', profile.user_id);
       if (error){ document.getElementById('gachaResult').textContent = '오류: '+error.message; return; }
       Object.assign(profile, updates);
-      document.getElementById('goldText').textContent = newGold;
-      buildSkinGrid();
+      applyHeaderUI(); buildSkinGrid(); updateProfileModalUI();
       document.getElementById('gachaResult').textContent = `당첨! [${grade}] ${skin.name}`;
     };
   </script>

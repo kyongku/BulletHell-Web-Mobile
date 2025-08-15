@@ -1,50 +1,42 @@
-// game.js — BulletHell Mobile (JS-only 통합본; 로그인 강제 버전)
+// game.js — BulletHell Mobile (sessionStorage 세션 유지 버전)
 // - Score: 50/sec
-// - Boss: every 3,000 score (≈1 min), stays 20s, easy pattern, no overlap
+// - Boss: every 3,000 score ≈1 min, stays 20s
 // - Bullets: smaller (normal 3.5 / boss 2.8), boss bullets TTL 6s
 // - Heal: missing 10% + 7, no natural despawn
 // - Growth: +10 MaxHP every 30s
 // - Gold: +10G at 20s after start, then every n minutes (CFG.goldIntervalMs)
-// - Supabase: wallet_add_gold(delta) RPC로 계정별 골드 저장/로드
-// - 새로고침 시 자동로그인 금지(persistSession:false). 세션 없으면 login.html로 튕김.
+// - Supabase: wallet_add_gold(delta) RPC
+// - 인증: 세션 없으면 login.html로 리다이렉트. 세션은 sessionStorage에 저장되어 탭 내 페이지 이동 시 유지.
 
-// ============== CFG ==============
 const W = 350, H = 350;
 const CFG = {
-  // HP & heal
   growthMs: 30000,
   growthAmount: 10,
   healMissingPct: 0.10,
   healPackFlat: 7,
   healPackSpawnMs: 9000,
 
-  // Bullet speed
   bulletSpeedBase: 10.0,
   bulletSpeedScale: 1 / 3000,
   normalSpeedMult: 5,
 
-  // Boss difficulty (easy)
-  bossSpeedMult: 20,   // 더 느리게 하려면 3.5~8 추천
+  bossSpeedMult: 20,
   bossBaseDmg: 6,
   bossDmgStep: 1,
   bossDmgEveryMs: 5000,
 
-  // Field spawn easing
-  minMs: 300,           // was 230
+  minMs: 300,
   freezeAfter: 12000,
 
-  // Score & gold
   scorePerSec: 50,
-  goldFirstMs: 20000,    // first payout at 20s
-  goldIntervalMs: 60000, // n minutes (1 min default)
+  goldFirstMs: 20000,
+  goldIntervalMs: 60000,
   goldPerPayout: 10,
 
-  // Supabase
   SUPABASE_URL: "https://pecoerlqanocydrdovbb.supabase.co",
   SUPABASE_ANON: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs"
 };
 
-// ============== Canvas & Input ==============
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -87,7 +79,7 @@ function inputAxis() {
   return { x: dx, y: dy };
 }
 
-// ============== HUD Handles ==============
+// HUD
 const hpFill = document.getElementById('hpFill');
 const hpText = document.getElementById('hpText');
 const liveScore = document.getElementById('liveScore');
@@ -102,16 +94,15 @@ function getGoldEl() {
 }
 let goldText = getGoldEl();
 
-// ============== Supabase (로그인 강제; 자동로그인 금지) ==============
+// Supabase (sessionStorage에 세션 저장)
 let supa = null;
 function ensureSupa() {
   if (supa) return supa;
   if (window.supabase && window.supabase.createClient) {
-    // ★ 중요: persistSession:false + autoRefreshToken:false + sessionStorage(혹시라도 쓸 때)
     supa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON, {
       auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+        persistSession: true,
+        autoRefreshToken: true,
         storage: window.sessionStorage
       }
     });
@@ -125,34 +116,22 @@ async function getSession() {
 }
 async function requireLoginOrRedirect() {
   const sess = await getSession();
-  if (!sess) {
-    // 게임 페이지에서 세션 없으면 로그인 화면으로
-    try { location.href = './login.html'; } catch(_) {}
-    return false;
-  }
+  if (!sess) { try { location.href = './login.html'; } catch(_) {} return false; }
   return true;
 }
-async function serverUser() {
-  const s = ensureSupa(); if (!s) return null;
-  const { data: { user } } = await s.auth.getUser();
-  return user || null;
-}
 async function serverAddGold(n) {
-  // 로그인 필수. 없으면 저장 안 함.
-  const ok = await requireLoginOrRedirect();
-  if (!ok) return { ok:false, reason:'not_logged_in' };
+  const ok = await requireLoginOrRedirect(); if (!ok) return { ok:false, reason:'not_logged_in' };
   const s = ensureSupa(); if (!s) return { ok:false, reason:'no_supabase' };
   const { data, error } = await s.rpc('wallet_add_gold', { delta: n });
   if (error) return { ok:false, reason:error.message };
   return { ok:true, total: data|0 };
 }
 async function serverGetGold() {
-  const ok = await requireLoginOrRedirect();
-  if (!ok) return { ok:false, reason:'not_logged_in' };
+  const ok = await requireLoginOrRedirect(); if (!ok) return { ok:false, reason:'not_logged_in' };
   return serverAddGold(0);
 }
 
-// ============== State ==============
+// State
 const state = {
   run: false, over: false, time: 0, score: 0, maxHP: 100,
   player: { x: W / 2, y: H * 0.85, r: 7, speed: 170, hp: 100 },
@@ -177,7 +156,7 @@ function updateHUD() {
   if (goldText) goldText.textContent = state.gold;
 }
 
-// ============== Objects ==============
+// Entities
 class Bullet {
   constructor(x, y, vx, vy, r, clr, dmg, isBoss=false, ttlMs=isBoss?6000:null) {
     this.x=x; this.y=y; this.vx=vx; this.vy=vy; this.r=r; this.clr=clr; this.dmg=dmg; this.isBoss=isBoss;
@@ -205,7 +184,7 @@ class Heal {
   expired(){ return false; }
 }
 
-// ============== Boss Patterns ==============
+// Boss
 function bossDmg() {
   const step = Math.floor(state.boss.t / CFG.bossDmgEveryMs);
   return CFG.bossBaseDmg + step * CFG.bossDmgStep;
@@ -229,7 +208,7 @@ function bossSpiral(cx, cy, step, count, speed, clr){
   }
 }
 
-// ============== Skin Painter ==============
+// Skin
 let cachedSkinId = null, painter = makePainter('white');
 function makePainter(id){
   return function(){
@@ -249,9 +228,8 @@ function makePainter(id){
   };
 }
 
-// ============== Gold Utils ==============
+// Gold
 async function grantGold(amount){
-  // 로그인 안 되어 있으면 여기서 바로 login.html로 튕긴다(requireLoginOrRedirect 내부)
   const res = await serverAddGold(amount);
   if (res && res.ok && typeof res.total === 'number') {
     state.gold = res.total|0;
@@ -261,7 +239,7 @@ async function grantGold(amount){
   if (t){ t.textContent = `+${amount} Gold`; setTimeout(()=>t.textContent='', 1500); }
 }
 
-// ============== Game Logic ==============
+// Game loop
 function reset(){
   state.run=true; state.over=false; state.time=0; state.score=0; state.maxHP=100;
   state.player = { x: W/2, y: H*0.85, r: 7, speed: 170, hp: state.maxHP };
@@ -299,7 +277,6 @@ function updateBoss(dt){
   const t = state.boss.t;
   const phase2 = (t >= 10000);
 
-  // Easy: alternate ring/spiral, slow cadence
   const cycle = phase2 ? 750 : 900;
   if (Math.floor(t/cycle) !== Math.floor(prev/cycle)){
     if ((state.boss.toggle++ % 2) === 0){
@@ -316,28 +293,23 @@ function updateBoss(dt){
 function update(dt){
   if (!state.run) return;
 
-  // time
   state.time += dt*1000;
 
-  // move
   const a = inputAxis();
   state.player.x += a.x*state.player.speed*dt;
   state.player.y += a.y*state.player.speed*dt;
   state.player.x = Math.max(state.player.r, Math.min(W - state.player.r, state.player.x));
   state.player.y = Math.max(state.player.r, Math.min(H - state.player.r, state.player.y));
 
-  // growth
   state.growthT += dt*1000;
   if (state.growthT >= CFG.growthMs){ state.growthT -= CFG.growthMs; state.maxHP += CFG.growthAmount; updateHUD(); }
 
-  // heal packs
   state.itemT += dt*1000;
   if (state.itemT >= CFG.healPackSpawnMs){
     state.itemT -= CFG.healPackSpawnMs;
     state.items.push(new Heal(10+Math.random()*(W-20), 10+Math.random()*(H-20)));
   }
 
-  // boss / field
   tryStartBoss();
   if (state.boss.active){
     updateBoss(dt);
@@ -346,7 +318,7 @@ function update(dt){
     state.diffT += dt*1000;
     if (state.spawnT >= state.spawnMs){
       state.spawnT -= state.spawnMs;
-      state.bullets.push(Bullet.aimedFromEdge(state.player.x, state.player.y, state.score)); // 한 발만
+      state.bullets.push(Bullet.aimedFromEdge(state.player.x, state.player.y, state.score));
     }
     if (state.diffT >= 4800){
       state.diffT -= 4800;
@@ -354,7 +326,6 @@ function update(dt){
     }
   }
 
-  // bullets
   for (const b of state.bullets) b.step(dt);
   state.bullets = state.bullets.filter(b => b.in());
   for (const b of state.bullets){
@@ -365,7 +336,6 @@ function update(dt){
     }
   }
 
-  // heals
   for (const it of state.items){
     if (Math.hypot(it.x-state.player.x, it.y-state.player.y) < it.r + state.player.r){
       const missing = state.maxHP - state.player.hp;
@@ -375,10 +345,8 @@ function update(dt){
   }
   state.items = state.items.filter(it => !it.picked && !it.expired());
 
-  // score & timed gold
   state.score += CFG.scorePerSec * dt;
   while (state.time >= state.nextGoldTime){
-    // 로그인 없으면 내부에서 login.html로 튕김
     grantGold(CFG.goldPerPayout);
     state.nextGoldTime += state.goldInterval;
   }
@@ -387,20 +355,16 @@ function update(dt){
   if (state.player.hp <= 0) gameOver();
 }
 
-// ============== Draw ==============
 function draw(){
   ctx.clearRect(0,0,W,H);
-  // border
   ctx.fillStyle='#fff';
   ctx.fillRect(0,0,W,4); ctx.fillRect(0,0,4,H);
   ctx.fillRect(W-4,0,4,H); ctx.fillRect(0,H-4,W,4);
 
-  // player
   const skinId = (window.GameConfig && window.GameConfig.selectedSkin) ? window.GameConfig.selectedSkin : 'white';
   if (skinId !== cachedSkinId){ painter = makePainter(skinId); cachedSkinId = skinId; }
   painter();
 
-  // bullets & heals
   for (const b of state.bullets){ ctx.fillStyle=b.clr; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
   for (const it of state.items){
     ctx.fillStyle='#ff6ec7';
@@ -414,7 +378,6 @@ function draw(){
   }
 }
 
-// ============== Loop & Buttons ==============
 let last=0, raf=0;
 function loop(ts){
   const dt = Math.min(0.05, (ts - (last || ts))/1000);
@@ -423,14 +386,12 @@ function loop(ts){
 }
 
 async function loadGoldAtStart(){
-  // 로그인 없으면 여기서 login.html로 이동됨
   const res = await serverGetGold().catch(()=>null);
   if (res && res.ok) { state.gold = res.total|0; }
   updateHUD();
 }
 
 async function startGame(){
-  // 세션 확인. 없으면 로그인으로 이동(위에서 튕김)
   const ok = await requireLoginOrRedirect();
   if (!ok) return;
 
@@ -442,7 +403,7 @@ async function startGame(){
   if (wrap) wrap.classList.remove('hidden');
 
   reset(); last=0; cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
-  loadGoldAtStart(); // 서버에서 현재 골드 로드
+  loadGoldAtStart();
 }
 window.startGame = startGame;
 
@@ -455,10 +416,7 @@ if (btnToMenu) btnToMenu.addEventListener('click', () => {
 
 const btnSaveRank = document.getElementById('btnSaveRank');
 if (btnSaveRank) btnSaveRank.addEventListener('click', async () => {
-  // 세션 없으면 여기서도 로그인 화면으로 튕김
-  const ok = await requireLoginOrRedirect();
-  if (!ok) return;
-
+  const ok = await requireLoginOrRedirect(); if (!ok) return;
   const saver = window.GameInterop && window.GameInterop.saveScore;
   if (!saver) return;
   const res = await saver(state.score);

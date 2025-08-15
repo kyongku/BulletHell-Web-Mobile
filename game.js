@@ -15,7 +15,7 @@ const ctx = canvas.getContext('2d');
 const CFG = {
   // HP 성장/힐팩
   growthMs: 30000,         // 30초마다
-  growthAmount: 10,        // MaxHP +10
+  growthAmount: 111111110,        // MaxHP +10
   healMissingPct: 0.10,    // 잃은 체력의 10%
   healPackFlat: 7,         // +7
   healPackSpawnMs: 9000,   // 힐팩 스폰 간격(ms). 자연 소멸은 없음

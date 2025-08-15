@@ -19,9 +19,9 @@ const CFG = {
   healPackSpawnMs: 9000,   // 힐팩 스폰 간격(ms). 자연 소멸은 없음
 
   // 탄속: 기본/기울기 + 배율
-  bulletSpeedBase: 100.0,
+  bulletSpeedBase: 300.0,
   bulletSpeedScale: 1 / 3000,
-  normalSpeedMult: 100,     // 일반탄 속도 ×10
+  normalSpeedMult: 10,     // 일반탄 속도 ×10
   bossSpeedMult: 20,        // 보스탄 속도 ×20
 
   // 데미지

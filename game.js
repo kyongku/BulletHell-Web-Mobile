@@ -24,7 +24,7 @@ const CFG = {
   bulletSpeedBase: 10.0,
   bulletSpeedScale: 1 / 3000,
   normalSpeedMult: 5,      // 일반탄 배율(필드 난도는 유지)
-  bossSpeedMult: 5,        // ▼ 보스탄 속도 완화(기존 9 → 5)
+  bossSpeedMult: 20,        // ▼ 보스탄 속도 완화(기존 9 → 5)
 
   // 데미지(보스 완화)
   normalBulletDmg: 7,

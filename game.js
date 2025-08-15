@@ -22,7 +22,7 @@ const CFG = {
   bulletSpeedBase: 10.0,
   bulletSpeedScale: 1 / 3000,
   normalSpeedMult: 5,     // 일반탄 속도 ×10
-  bossSpeedMult: 3,        // 보스탄 속도 ×20
+  bossSpeedMult: 9,        // 보스탄 속도 ×20
 
   // 데미지
   normalBulletDmg: 7,

@@ -420,9 +420,11 @@ function loop(ts){
   if (state.run) raf = requestAnimationFrame(loop);
 }
 async function loadGoldAtStart(){
-  const res = await serverGetGold().catch(()=>null);
-  if (res && res.ok) { state.gold = res.total|0; }
+  const g = await fetchGold();
+  state.gold = g;
   updateHUD();
+  const el = document.getElementById('goldText');
+  if (el) el.textContent = g;
 }
 async function startGame(){
   const ok = await requireLoginOrRedirect();

@@ -9,7 +9,7 @@ const canvas=document.getElementById('gameCanvas'); const ctx=canvas.getContext(
 const CFG = {
   growthMs: 30000, growthAmount: 10,
   healPackPercent: 0.10, healPackFlat: 7, healPackSpawnMs: 9000,
-  bulletSpeedBase: 5.0, bulletSpeedScale: 1/3000,
+  bulletSpeedBase: 15.0, bulletSpeedScale: 1/3000,
   normalBulletDmg: 7, bossBaseDmg: 10, bossDmgStep: 2, bossDmgEveryMs: 3000
 };
 
@@ -40,8 +40,8 @@ class Heal{constructor(x,y){this.x=x;this.y=y;this.r=7;} expired(){return false;
 
 // 보스 탄
 function bossDmg(){const step=Math.floor(state.boss.t/CFG.bossDmgEveryMs);return CFG.bossBaseDmg+step*CFG.bossDmgStep;}
-function bossRing(cx,cy,count,speed,radius,clr){for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2;const x=cx+Math.cos(a)*radius,y=cy+Math.sin(a)*radius;const vx=Math.cos(a)*speed,vy=Math.sin(a)*speed;state.bullets.push(new Bullet(x,y,vx,vy,3.5,clr||'#7dd3fc',bossDmg(),true));}}
-function bossSpiral(cx,cy,step,count,speed,clr){const start=performance.now();for(let i=0;i<count;i++){const a=(i*step)+start/700;const vx=Math.cos(a)*speed,vy=Math.sin(a)*speed;state.bullets.push(new Bullet(cx,cy,vx,vy,3.5,clr||'#a78bfa',bossDmg(),true));}}
+function bossRing(cx,cy,count,speed,radius,clr){for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2;const x=cx+Math.cos(a)*radius,y=cy+Math.sin(a)*radius;const vx=Math.cos(a)*speed,vy=Math.sin(a)*speed;state.bullets.push(new Bullet(x,y,vx,vy,35,clr||'#7dd3fc',bossDmg(),true));}}
+function bossSpiral(cx,cy,step,count,speed,clr){const start=performance.now();for(let i=0;i<count;i++){const a=(i*step)+start/700;const vx=Math.cos(a)*speed,vy=Math.sin(a)*speed;state.bullets.push(new Bullet(cx,cy,vx,vy,35,clr||'#a78bfa',bossDmg(),true));}}
 
 // HUD
 function updateHUD(){

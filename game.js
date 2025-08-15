@@ -1,12 +1,13 @@
-// game.js — BulletHell Mobile (완화 패치본)
+// game.js — BulletHell Mobile (완화+시간기반 골드 지급 통합본)
 // - 점수: 1초에 50점
 // - 보스: 3,000점마다 등장(= 1분 주기), 정확히 20초 상주
-// - 보스 난이도 완화: 속도/탄수/주기/데미지 낮춤
-// - 힐팩: "잃은 체력의 10% + 7" 회복, 먹으면 즉시 사라짐(자연 소멸 없음)
+// - 보스 난이도 완화 + 패턴 겹침 방지(링/스파이럴 번갈아 발사)
+// - 탄환 크기 축소: 일반 3.5 / 보스 2.8
+// - 힐팩: "잃은 체력 10% + 7" 회복, 자연 소멸 없음
 // - 30초마다 MaxHP +10, 힐팩 주기 스폰
-// - 탄속은 점수 비례 증가(10,000점에서 고정), 스폰속도는 12,000점까지 가속 후 고정
+// - 시간 기반 골드: 시작 20초 후 10골드, 이후 n분마다 10골드 (n은 설정값)
 // - 보스 클리어 콜백 GameInterop.onBossClear(n)
-// - HUD는 index.html에서 관리(HP 바/텍스트/점수)
+// - HUD는 index.html에서 관리(HP/점수/골드 텍스트 지원)
 
 const W = 350, H = 350;
 const canvas = document.getElementById('gameCanvas');
@@ -14,23 +15,28 @@ const ctx = canvas.getContext('2d');
 
 const CFG = {
   // HP 성장/힐팩
-  growthMs: 30,         // 30초마다
-  growthAmount: 110,        // MaxHP +10
+  growthMs: 30000,         // 30초마다
+  growthAmount: 10,        // MaxHP +10
   healMissingPct: 0.10,    // 잃은 체력의 10%
   healPackFlat: 7,         // +7
-  healPackSpawnMs: 9000,   // 힐팩 스폰 간격(ms). 자연 소멸은 없음
+  healPackSpawnMs: 9000,   // 힐팩 스폰 간격(ms). 자연 소멸 없음
 
   // 탄속: 기본/기울기 + 배율
   bulletSpeedBase: 10.0,
   bulletSpeedScale: 1 / 3000,
-  normalSpeedMult: 5,      // 일반탄 배율(필드 난도는 유지)
-  bossSpeedMult: 20,        // ▼ 보스탄 속도 완화(기존 9 → 5)
+  normalSpeedMult: 5,      // 일반탄 배율
+  bossSpeedMult: 20,        // 보스탄 속도 증가(기존 9 → 20)
 
   // 데미지(보스 완화)
   normalBulletDmg: 7,
-  bossBaseDmg: 7,          // ▼ 10 → 7
-  bossDmgStep: 1,          // ▼ 2 → 1
-  bossDmgEveryMs: 4000     // ▼ 3000 → 4000
+  bossBaseDmg: 7,          // 10 → 7
+  bossDmgStep: 1,          // 2 → 1
+  bossDmgEveryMs: 4000,    // 3000 → 4000
+
+  // 골드 지급(시간 기반)
+  goldFirstMs: 20000,      // 시작 20초 후 첫 지급
+  goldIntervalMs: 60000,   // 이후 n분(기본 1분)마다
+  goldPerPayout: 10
 };
 
 // ───────────────── 입력(모바일 조이스틱 + 키보드) ─────────────────
@@ -77,6 +83,7 @@ function inputAxis() {
 const hpFill = document.getElementById('hpFill');
 const hpText = document.getElementById('hpText');
 const liveScore = document.getElementById('liveScore');
+const goldText = document.getElementById('liveGold') || document.getElementById('goldText');
 
 const state = {
   run: false, over: false, time: 0, score: 0, maxHP: 100,
@@ -84,16 +91,24 @@ const state = {
   bullets: [],
   spawnT: 0, spawnMs: 700, diffT: 0, minMs: 230, freezeAfter: 12000, // 12k점까지 스폰 가속
   boss: { active: false, t: 0, next: 3000, count: 0 }, // 3,000점마다 보스 페이즈
+  // 보스 패턴 겹침 방지용 토글(링/스파이럴 번갈아)
+  bossToggle: 0,
   growthT: 0,
-  items: [], itemT: 0
+  items: [], itemT: 0,
+  // 골드
+  gold: 0,
+  nextGoldTime: CFG.goldFirstMs,
+  goldInterval: CFG.goldIntervalMs
 };
 
 function updateHUD() {
-  if (!hpFill || !hpText || !liveScore) return;
-  const pct = Math.max(0, Math.min(1, state.player.hp / state.maxHP));
-  hpFill.style.width = (pct * 100) + '%';
-  hpText.textContent = `${Math.floor(state.player.hp)} / ${state.maxHP}`;
-  liveScore.textContent = Math.floor(state.score);
+  if (hpFill && hpText) {
+    const pct = Math.max(0, Math.min(1, state.player.hp / state.maxHP));
+    hpFill.style.width = (pct * 100) + '%';
+    hpText.textContent = `${Math.floor(state.player.hp)} / ${state.maxHP}`;
+  }
+  if (liveScore) liveScore.textContent = Math.floor(state.score);
+  if (goldText) goldText.textContent = state.gold;
 }
 
 // ───────────────── 오브젝트 ─────────────────
@@ -110,8 +125,8 @@ class Bullet {
     const dx = px - x, dy = py - y, len = Math.hypot(dx, dy) || 1;
     const capScore = Math.min(score, 10000); // 1만점에서 탄속 증가 고정
     const baseSp = CFG.bulletSpeedBase + capScore * CFG.bulletSpeedScale;
-    const sp = baseSp * CFG.normalSpeedMult; // 일반탄
-    return new Bullet(x, y, dx / len * sp, dy / len * sp, 4.5, '#ff4b4b', CFG.normalBulletDmg, false);
+    const sp = baseSp * CFG.normalSpeedMult;
+    return new Bullet(x, y, dx / len * sp, dy / len * sp, 3.5, '#ff4b4b', CFG.normalBulletDmg, false); // 4.5 → 3.5
   }
 }
 
@@ -126,21 +141,21 @@ function bossDmg() {
   return CFG.bossBaseDmg + step * CFG.bossDmgStep;
 }
 function bossRing(cx, cy, count, speed, radius, clr) {
-  const s = speed * CFG.bossSpeedMult; // 완화된 보스탄 속도
+  const s = speed * CFG.bossSpeedMult;
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2;
     const x = cx + Math.cos(a) * radius, y = cy + Math.sin(a) * radius;
     const vx = Math.cos(a) * s, vy = Math.sin(a) * s;
-    state.bullets.push(new Bullet(x, y, vx, vy, 3.5, clr || '#7dd3fc', bossDmg(), true));
+    state.bullets.push(new Bullet(x, y, vx, vy, 2.8, clr || '#7dd3fc', bossDmg(), true)); // 3.5 → 2.8
   }
 }
 function bossSpiral(cx, cy, step, count, speed, clr) {
-  const s = speed * CFG.bossSpeedMult; // 완화된 보스탄 속도
+  const s = speed * CFG.bossSpeedMult;
   const start = performance.now();
   for (let i = 0; i < count; i++) {
     const a = (i * step) + start / 700;
     const vx = Math.cos(a) * s, vy = Math.sin(a) * s;
-    state.bullets.push(new Bullet(cx, cy, vx, vy, 3.5, clr || '#a78bfa', bossDmg(), true));
+    state.bullets.push(new Bullet(cx, cy, vx, vy, 2.8, clr || '#a78bfa', bossDmg(), true)); // 3.5 → 2.8
   }
 }
 
@@ -197,6 +212,19 @@ function stripePattern(colors) {
   return ctx.createPattern(off, 'repeat');
 }
 
+// ───────────────── 유틸 ─────────────────
+function grantGold(amount) {
+  // 1) 서버/DB 반영(있으면)
+  if (window.GameInterop && typeof window.GameInterop.addGold === 'function') {
+    try { window.GameInterop.addGold(amount); } catch (_) {}
+  }
+  // 2) 로컬 표시
+  state.gold += amount;
+  if (goldText) goldText.textContent = state.gold;
+  const t = document.getElementById('saveToast');
+  if (t) { t.textContent = `+${amount} Gold`; setTimeout(() => t.textContent = '', 1500); }
+}
+
 // ───────────────── 게임 루프/로직 ─────────────────
 function reset() {
   state.run = true; state.over = false; state.time = 0; state.score = 0; state.maxHP = 100;
@@ -204,7 +232,12 @@ function reset() {
   state.bullets.length = 0;
   state.spawnT = 0; state.spawnMs = 700; state.diffT = 0;
   state.boss = { active: false, t: 0, next: 3000, count: 0 };
+  state.bossToggle = 0;
   state.growthT = 0; state.items.length = 0; state.itemT = 0;
+  // 골드
+  state.gold = 0;
+  state.nextGoldTime = CFG.goldFirstMs;
+  state.goldInterval = CFG.goldIntervalMs;
   updateHUD();
 }
 function gameOver() {
@@ -219,48 +252,56 @@ function heal(n) { state.player.hp = Math.min(state.maxHP, state.player.hp + n);
 function tryStartBoss() {
   if (state.score >= state.boss.next && !state.boss.active) {
     state.boss.active = true; state.boss.t = 0; state.boss.next += 3000; state.boss.count += 1;
+    state.bossToggle = 0; // 새 페이즈마다 패턴 교대 초기화
   }
 }
 function endBossPhase() {
   state.boss.active = false;
   if (window.GameInterop && typeof window.GameInterop.onBossClear === 'function') {
-    window.GameInterop.onBossClear(state.boss.count); // 보상은 상위 로직에서 처리
+    window.GameInterop.onBossClear(state.boss.count);
   }
 }
 
 function updateBoss(dt) {
+  // 보스 시간(ms)
+  const prev = state.boss.t;
   state.boss.t += dt * 1000;
   const t = state.boss.t;
 
-  // 0s ~ 10s : 페이즈 1 (완화)
-  if (t < 10000) {
-    // 링: 700ms마다 16발, 속도 낮음 + 반경 약간 크게
-    if (Math.floor(t / 700) !== Math.floor((t - dt * 1000) / 700)) {
-      bossRing(W / 2, H / 2, 16, 2.2, 8, '#38bdf8');
-    }
-    // 스파이럴: 140ms마다 10발, 속도 낮음
-    if (Math.floor(t / 140) !== Math.floor((t - dt * 1000) / 140)) {
-      bossSpiral(W / 2, H / 2, 0.35, 10, 2.0, '#c084fc');
-    }
+  // 총 20초 상주
+  // 페이즈1: 0~10s, 페이즈2: 10~20s
+  // 겹침 방지: 400~800ms 주기로 링/스파이럴 번갈아 발사
+  const phase2 = (t >= 10000);
 
-  // 10s ~ 20s : 페이즈 2 (완화)
-  } else if (t < 20000) {
-    // 링: 550ms마다 24발
-    if (Math.floor(t / 550) !== Math.floor((t - dt * 1000) / 550)) {
-      bossRing(W / 2, H / 2, 24, 2.5, 12, '#34d399');
+  // 트리거 간격
+  const cycle = phase2 ? 500 : 700;      // 발사 주기(느긋하게)
+  if (Math.floor(t / cycle) !== Math.floor(prev / cycle)) {
+    // 토글에 따라 번갈아 발사
+    if ((state.bossToggle++ % 2) === 0) {
+      // 링
+      if (!phase2) {
+        bossRing(W / 2, H / 2, 16, 2.2, 8, '#38bdf8');
+      } else {
+        bossRing(W / 2, H / 2, 22, 2.4, 12, '#34d399');
+      }
+    } else {
+      // 스파이럴
+      if (!phase2) {
+        bossSpiral(W / 2, H / 2, 0.34, 10, 2.0, '#c084fc');
+      } else {
+        bossSpiral(W / 2, H / 2, 0.46, 12, 2.2, '#f472b6');
+      }
     }
-    // 스파이럴: 120ms마다 14발
-    if (Math.floor(t / 120) !== Math.floor((t - dt * 1000) / 120)) {
-      bossSpiral(W / 2, H / 2, 0.48, 14, 2.2, '#f472b6');
-    }
-
-  } else {
-    endBossPhase(); // 정확히 20초에 종료
   }
+
+  if (t >= 20000) endBossPhase(); // 정확히 20s에 종료
 }
 
 function update(dt) {
   if (!state.run) return;
+
+  // 시간 누적(ms)
+  state.time += dt * 1000;
 
   // 이동
   const a = inputAxis();
@@ -321,7 +362,13 @@ function update(dt) {
   state.items = state.items.filter(it => !it.picked && !it.expired());
 
   // 점수/HUD/사망
-  state.score += 50 * dt;   // ▼ 70 → 50 (1초에 50점)
+  state.score += 50 * dt;   // 1초에 50점
+  // 시간 기반 골드 지급
+  while (state.time >= state.nextGoldTime) {
+    grantGold(CFG.goldPerPayout);
+    state.nextGoldTime += state.goldInterval;
+  }
+
   updateHUD();
   if (state.player.hp <= 0) gameOver();
 }

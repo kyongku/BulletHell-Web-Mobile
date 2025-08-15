@@ -1,49 +1,56 @@
-// game.js — BulletHell Mobile (완화+시간기반 골드 지급 통합본)
-// - 점수: 1초에 50점
-// - 보스: 3,000점마다 등장(= 1분 주기), 정확히 20초 상주
-// - 보스 난이도 완화 + 패턴 겹침 방지(링/스파이럴 번갈아 발사)
-// - 탄환 크기 축소: 일반 3.5 / 보스 2.8
-// - 힐팩: "잃은 체력 10% + 7" 회복, 자연 소멸 없음
-// - 30초마다 MaxHP +10, 힐팩 주기 스폰
-// - 시간 기반 골드: 시작 20초 후 10골드, 이후 n분마다 10골드 (n은 설정값)
-// - 보스 클리어 콜백 GameInterop.onBossClear(n)
-// - HUD는 index.html에서 관리(HP/점수/골드 텍스트 지원)
+// game.js — BulletHell Mobile (JS-only 통합본)
+// - Score: 50/sec
+// - Boss: every 3,000 score (≈1 min), stays 20s, easy pattern, no overlap
+// - Bullets: smaller (normal 3.5 / boss 2.8), boss bullets TTL 6s
+// - Heal: missing 10% + 7, no natural despawn
+// - Growth: +10 MaxHP every 30s
+// - Gold: +10G at 20s after start, then every n minutes (CFG.goldIntervalMs)
+// - Supabase: wallet_add_gold(delta) RPC로 계정별 골드 저장/로드 (JS만으로 동작)
 
+//////////////////// CFG ////////////////////
 const W = 350, H = 350;
+const CFG = {
+  // HP & heal
+  growthMs: 30000,
+  growthAmount: 10,
+  healMissingPct: 0.10,
+  healPackFlat: 7,
+  healPackSpawnMs: 9000,
+
+  // Bullet speed
+  bulletSpeedBase: 10.0,
+  bulletSpeedScale: 1 / 3000,
+  normalSpeedMult: 5,
+
+  // Boss difficulty (easy)
+  bossSpeedMult: 20,   // <= 더 낮추려면 3.5 추천
+  bossBaseDmg: 6,
+  bossDmgStep: 1,
+  bossDmgEveryMs: 5000,
+
+  // Field spawn easing
+  minMs: 300,           // was 230
+  freezeAfter: 12000,
+
+  // Score & gold
+  scorePerSec: 50,
+  goldFirstMs: 20000,    // first payout at 20s
+  goldIntervalMs: 60000, // n minutes (1 min default)
+  goldPerPayout: 10,
+
+  // Supabase (이미 index.html에 supabase-js CDN이 있으면 자동 사용)
+  SUPABASE_URL: "https://pecoerlqanocydrdovbb.supabase.co",
+  SUPABASE_ANON: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs"
+};
+
+//////////////////// Canvas & Input ////////////////////
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const CFG = {
-  // HP 성장/힐팩
-  growthMs: 3,         // 30초마다
-  growthAmount: 10,        // MaxHP +10
-  healMissingPct: 0.10,    // 잃은 체력의 10%
-  healPackFlat: 7,         // +7
-  healPackSpawnMs: 9000,   // 힐팩 스폰 간격(ms). 자연 소멸 없음
-
-  // 탄속: 기본/기울기 + 배율
-  bulletSpeedBase: 10.0,
-  bulletSpeedScale: 1 / 3000,
-  normalSpeedMult: 5,      // 일반탄 배율
-  bossSpeedMult: 20,        // 보스탄 속도 증가(기존 9 → 20)
-
-  // 데미지(보스 완화)
-  normalBulletDmg: 7,
-  bossBaseDmg: 7,          // 10 → 7
-  bossDmgStep: 1,          // 2 → 1
-  bossDmgEveryMs: 4000,    // 3000 → 4000
-
-  // 골드 지급(시간 기반)
-  goldFirstMs: 20000,      // 시작 20초 후 첫 지급
-  goldIntervalMs: 60000,   // 이후 n분(기본 1분)마다
-  goldPerPayout: 10
-};
-
-// ───────────────── 입력(모바일 조이스틱 + 키보드) ─────────────────
 (function () {
   const pad = document.getElementById('pad');
   const stick = document.getElementById('stick');
-  if (!pad || !stick) return; // 안전장치(메뉴 상태 등)
+  if (!pad || !stick) return;
   let active = false, axis = { x: 0, y: 0 };
 
   function setAxis(x, y) {
@@ -79,23 +86,58 @@ function inputAxis() {
   return { x: dx, y: dy };
 }
 
-// ───────────────── 상태/HUD 핸들 ─────────────────
+//////////////////// HUD Handles ////////////////////
 const hpFill = document.getElementById('hpFill');
 const hpText = document.getElementById('hpText');
 const liveScore = document.getElementById('liveScore');
-const goldText = document.getElementById('liveGold') || document.getElementById('goldText');
+function getGoldEl() {
+  return (
+    document.getElementById('liveGold') ||
+    document.getElementById('goldText') ||
+    document.getElementById('gold') ||
+    document.querySelector('[data-role="gold"]') ||
+    null
+  );
+}
+let goldText = getGoldEl();
 
+//////////////////// Supabase Helpers ////////////////////
+let supa = null;
+function ensureSupa() {
+  if (supa) return supa;
+  if (window.supabase && window.supabase.createClient) {
+    supa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON);
+  }
+  return supa;
+}
+async function serverUser() {
+  const s = ensureSupa(); if (!s) return null;
+  const { data: { user } } = await s.auth.getUser();
+  return user || null;
+}
+async function serverAddGold(n) {
+  const s = ensureSupa(); if (!s) return { ok:false, reason:'no_supabase' };
+  const user = await serverUser(); if (!user) return { ok:false, reason:'not_logged_in' };
+  const { data, error } = await s.rpc('wallet_add_gold', { delta: n });
+  if (error) return { ok:false, reason:error.message };
+  return { ok:true, total: data|0 };
+}
+async function serverGetGold() {
+  // RPC delta 0 → 현재 total 반환
+  const res = await serverAddGold(0);
+  if (!res.ok) return res;
+  return { ok:true, total: res.total|0 };
+}
+
+//////////////////// State ////////////////////
 const state = {
   run: false, over: false, time: 0, score: 0, maxHP: 100,
   player: { x: W / 2, y: H * 0.85, r: 7, speed: 170, hp: 100 },
   bullets: [],
-  spawnT: 0, spawnMs: 700, diffT: 0, minMs: 230, freezeAfter: 12000, // 12k점까지 스폰 가속
-  boss: { active: false, t: 0, next: 3000, count: 0 }, // 3,000점마다 보스 페이즈
-  // 보스 패턴 겹침 방지용 토글(링/스파이럴 번갈아)
-  bossToggle: 0,
+  spawnT: 0, spawnMs: 700, diffT: 0,
+  boss: { active: false, t: 0, next: 3000, count: 0, toggle: 0 },
   growthT: 0,
   items: [], itemT: 0,
-  // 골드
   gold: 0,
   nextGoldTime: CFG.goldFirstMs,
   goldInterval: CFG.goldIntervalMs
@@ -108,264 +150,214 @@ function updateHUD() {
     hpText.textContent = `${Math.floor(state.player.hp)} / ${state.maxHP}`;
   }
   if (liveScore) liveScore.textContent = Math.floor(state.score);
+  goldText = getGoldEl() || goldText;
   if (goldText) goldText.textContent = state.gold;
 }
 
-// ───────────────── 오브젝트 ─────────────────
+//////////////////// Objects ////////////////////
 class Bullet {
-  constructor(x, y, vx, vy, r, clr, dmg, isBoss = false) {
-    this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.r = r; this.clr = clr; this.dmg = dmg; this.isBoss = isBoss;
+  constructor(x, y, vx, vy, r, clr, dmg, isBoss=false, ttlMs=isBoss?6000:null) {
+    this.x=x; this.y=y; this.vx=vx; this.vy=vy; this.r=r; this.clr=clr; this.dmg=dmg; this.isBoss=isBoss;
+    this.ttlMs=ttlMs; this.ageMs=0;
   }
-  step(dt) { this.x += this.vx * dt; this.y += this.vy * dt; }
-  in() { return this.x > -30 && this.x < W + 30 && this.y > -30 && this.y < H + 30; }
-  static aimedFromEdge(px, py, score) {
+  step(dt){ this.x+=this.vx*dt; this.y+=this.vy*dt; this.ageMs+=dt*1000; }
+  in(){
+    const inBox = this.x>-30 && this.x<W+30 && this.y>-30 && this.y<H+30;
+    const alive = (this.ttlMs==null) || (this.ageMs < this.ttlMs);
+    return inBox && alive;
+  }
+  static aimedFromEdge(px, py, score){
     let x, y;
-    if (Math.random() < .5) { x = Math.random() * W; y = Math.random() < .5 ? 0 : H; }
-    else { x = Math.random() < .5 ? 0 : W; y = Math.random() * H; }
+    if (Math.random() < .5) { x = Math.random()*W; y = Math.random()<.5 ? 0 : H; }
+    else { x = Math.random()<.5 ? 0 : W; y = Math.random()*H; }
     const dx = px - x, dy = py - y, len = Math.hypot(dx, dy) || 1;
-    const capScore = Math.min(score, 10000); // 1만점에서 탄속 증가 고정
+    const capScore = Math.min(score, 10000);
     const baseSp = CFG.bulletSpeedBase + capScore * CFG.bulletSpeedScale;
     const sp = baseSp * CFG.normalSpeedMult;
-    return new Bullet(x, y, dx / len * sp, dy / len * sp, 3.5, '#ff4b4b', CFG.normalBulletDmg, false); // 4.5 → 3.5
+    return new Bullet(x, y, dx/len*sp, dy/len*sp, 3.5, '#ff4b4b', 7, false);
   }
 }
-
 class Heal {
-  constructor(x, y) { this.x = x; this.y = y; this.r = 7; this.picked = false; }
-  expired() { return false; } // 자연 소멸 없음
+  constructor(x,y){ this.x=x; this.y=y; this.r=7; this.picked=false; }
+  expired(){ return false; }
 }
 
-// ───────────────── 보스 패턴 ─────────────────
+//////////////////// Boss Patterns ////////////////////
 function bossDmg() {
   const step = Math.floor(state.boss.t / CFG.bossDmgEveryMs);
   return CFG.bossBaseDmg + step * CFG.bossDmgStep;
 }
-function bossRing(cx, cy, count, speed, radius, clr) {
+function bossRing(cx, cy, count, speed, radius, clr){
   const s = speed * CFG.bossSpeedMult;
-  for (let i = 0; i < count; i++) {
-    const a = (i / count) * Math.PI * 2;
-    const x = cx + Math.cos(a) * radius, y = cy + Math.sin(a) * radius;
-    const vx = Math.cos(a) * s, vy = Math.sin(a) * s;
-    state.bullets.push(new Bullet(x, y, vx, vy, 2.8, clr || '#7dd3fc', bossDmg(), true)); // 3.5 → 2.8
+  for (let i=0;i<count;i++){
+    const a = (i / count) * Math.PI*2;
+    const x = cx + Math.cos(a)*radius, y = cy + Math.sin(a)*radius;
+    const vx = Math.cos(a)*s, vy = Math.sin(a)*s;
+    state.bullets.push(new Bullet(x,y,vx,vy,2.8,clr||'#7dd3fc',bossDmg(),true));
   }
 }
-function bossSpiral(cx, cy, step, count, speed, clr) {
+function bossSpiral(cx, cy, step, count, speed, clr){
   const s = speed * CFG.bossSpeedMult;
   const start = performance.now();
-  for (let i = 0; i < count; i++) {
-    const a = (i * step) + start / 700;
-    const vx = Math.cos(a) * s, vy = Math.sin(a) * s;
-    state.bullets.push(new Bullet(cx, cy, vx, vy, 2.8, clr || '#a78bfa', bossDmg(), true)); // 3.5 → 2.8
+  for (let i=0;i<count;i++){
+    const a = (i*step) + start/700;
+    const vx = Math.cos(a)*s, vy = Math.sin(a)*s;
+    state.bullets.push(new Bullet(cx,cy,vx,vy,2.8,clr||'#a78bfa',bossDmg(),true));
   }
 }
 
-// ───────────────── 패턴 스킨(선택) ─────────────────
+//////////////////// Skin Painter ////////////////////
 let cachedSkinId = null, painter = makePainter('white');
-function makePainter(id) {
-  return function drawPlayer() {
-    ctx.save();
-    ctx.translate(state.player.x, state.player.y);
-    ctx.beginPath(); ctx.arc(0, 0, state.player.r, 0, Math.PI * 2);
-    switch (id) {
-      case 'white': ctx.fillStyle = '#ffffff'; break;
-      case 'mint': ctx.fillStyle = '#7ef5d1'; break;
-      case 'sky': ctx.fillStyle = '#7ecbff'; break;
-      case 'lime': ctx.fillStyle = '#a6ff6b'; break;
-      case 'orange': ctx.fillStyle = '#ffb36b'; break;
-      case 'violet': ctx.fillStyle = '#ba8bff'; break;
-      case 'aqua': ctx.fillStyle = '#6bfffb'; break;
-      case 'stripe-mint-sky': ctx.fillStyle = stripePattern(['#7ef5d1', '#7ecbff']); break;
-      case 'stripe-orange-violet': ctx.fillStyle = stripePattern(['#ffb36b', '#ba8bff']); break;
-      case 'grad-sunrise': {
-        const g = ctx.createLinearGradient(-10, -10, 10, 10);
-        g.addColorStop(0, '#ff9a9e'); g.addColorStop(0.5, '#fad0c4'); g.addColorStop(1, '#ffd1ff'); ctx.fillStyle = g; break;
-      }
-      case 'grad-sea': {
-        const g = ctx.createLinearGradient(-10, -10, 10, 10);
-        g.addColorStop(0, '#36d1dc'); g.addColorStop(1, '#5b86e5'); ctx.fillStyle = g; break;
-      }
-      case 'stripe-gold-silver': ctx.fillStyle = stripePattern(['#ffd700', '#c0c0c0']); break;
-      case 'grad-sunset': {
-        const g = ctx.createLinearGradient(-10, 0, 10, 0);
-        g.addColorStop(0, '#0b486b'); g.addColorStop(1, '#f56217'); ctx.fillStyle = g; break;
-      }
-      case 'god-rainbow': {
-        const g = ctx.createLinearGradient(-10, 0, 10, 0);
-        const colors = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
-        colors.forEach((c, i) => g.addColorStop(i / (colors.length - 1), c));
-        ctx.fillStyle = g; break;
-      }
-      default: ctx.fillStyle = '#ffffff';
+function makePainter(id){
+  return function(){
+    ctx.save(); ctx.translate(state.player.x, state.player.y);
+    ctx.beginPath(); ctx.arc(0,0,state.player.r,0,Math.PI*2);
+    switch(id){
+      case 'white': ctx.fillStyle='#fff'; break;
+      case 'mint': ctx.fillStyle='#7ef5d1'; break;
+      case 'sky': ctx.fillStyle='#7ecbff'; break;
+      case 'lime': ctx.fillStyle='#a6ff6b'; break;
+      case 'orange': ctx.fillStyle='#ffb36b'; break;
+      case 'violet': ctx.fillStyle='#ba8bff'; break;
+      case 'aqua': ctx.fillStyle='#6bfffb'; break;
+      default: ctx.fillStyle='#ffffff';
     }
-    ctx.fill();
-    ctx.restore();
+    ctx.fill(); ctx.restore();
   };
 }
-function stripePattern(colors) {
-  const off = document.createElement('canvas');
-  off.width = 16; off.height = 16;
-  const c = off.getContext('2d');
-  c.fillStyle = colors[0]; c.fillRect(0, 0, 16, 16);
-  c.fillStyle = colors[1];
-  c.beginPath();
-  c.moveTo(0, 8); c.lineTo(8, 0); c.lineTo(16, 8); c.lineTo(8, 16); c.closePath(); c.fill();
-  return ctx.createPattern(off, 'repeat');
-}
 
-// ───────────────── 유틸 ─────────────────
-function grantGold(amount) {
-  // 1) 서버/DB 반영(있으면)
-  if (window.GameInterop && typeof window.GameInterop.addGold === 'function') {
-    try { window.GameInterop.addGold(amount); } catch (_) {}
-  }
-  // 2) 로컬 표시
-  state.gold += amount;
-  if (goldText) goldText.textContent = state.gold;
+//////////////////// Gold Utils ////////////////////
+async function grantGold(amount){
+  let total = null;
+  try {
+    const res = await serverAddGold(amount);
+    if (res && res.ok && typeof res.total === 'number') total = res.total|0;
+  } catch(_) {}
+  if (total === null) total = (state.gold|0) + amount; // fallback(로그인X/오프라인)
+  state.gold = total;
+  updateHUD();
   const t = document.getElementById('saveToast');
-  if (t) { t.textContent = `+${amount} Gold`; setTimeout(() => t.textContent = '', 1500); }
+  if (t){ t.textContent = `+${amount} Gold`; setTimeout(()=>t.textContent='', 1500); }
 }
 
-// ───────────────── 게임 루프/로직 ─────────────────
-function reset() {
-  state.run = true; state.over = false; state.time = 0; state.score = 0; state.maxHP = 100;
-  state.player = { x: W / 2, y: H * 0.85, r: 7, speed: 170, hp: state.maxHP };
-  state.bullets.length = 0;
-  state.spawnT = 0; state.spawnMs = 700; state.diffT = 0;
-  state.boss = { active: false, t: 0, next: 3000, count: 0 };
-  state.bossToggle = 0;
-  state.growthT = 0; state.items.length = 0; state.itemT = 0;
-  // 골드
-  state.gold = 0;
+//////////////////// Game Logic ////////////////////
+function reset(){
+  state.run=true; state.over=false; state.time=0; state.score=0; state.maxHP=100;
+  state.player = { x: W/2, y: H*0.85, r: 7, speed: 170, hp: state.maxHP };
+  state.bullets.length=0;
+  state.spawnT=0; state.spawnMs=700; state.diffT=0;
+  state.boss = { active:false, t:0, next:3000, count:0, toggle:0 };
+  state.growthT=0; state.items.length=0; state.itemT=0;
   state.nextGoldTime = CFG.goldFirstMs;
   state.goldInterval = CFG.goldIntervalMs;
   updateHUD();
 }
-function gameOver() {
-  state.run = false; state.over = true;
-  const fs = document.getElementById('finalScore');
-  const over = document.getElementById('over');
+function gameOver(){
+  state.run=false; state.over=true;
+  const fs=document.getElementById('finalScore');
+  const over=document.getElementById('over');
   if (fs) fs.textContent = Math.floor(state.score);
   if (over) over.classList.remove('hidden');
 }
-function heal(n) { state.player.hp = Math.min(state.maxHP, state.player.hp + n); updateHUD(); }
+function heal(n){ state.player.hp = Math.min(state.maxHP, state.player.hp + n); updateHUD(); }
 
-function tryStartBoss() {
-  if (state.score >= state.boss.next && !state.boss.active) {
-    state.boss.active = true; state.boss.t = 0; state.boss.next += 3000; state.boss.count += 1;
-    state.bossToggle = 0; // 새 페이즈마다 패턴 교대 초기화
+function tryStartBoss(){
+  if (state.score >= state.boss.next && !state.boss.active){
+    state.boss.active=true; state.boss.t=0; state.boss.next+=3000; state.boss.count+=1; state.boss.toggle=0;
   }
 }
-function endBossPhase() {
-  state.boss.active = false;
-  if (window.GameInterop && typeof window.GameInterop.onBossClear === 'function') {
-    window.GameInterop.onBossClear(state.boss.count);
+function endBossPhase(){
+  state.boss.active=false;
+  if (window.GameInterop && typeof window.GameInterop.onBossClear === 'function'){
+    try { window.GameInterop.onBossClear(state.boss.count); } catch(_) {}
   }
 }
-
-function updateBoss(dt) {
-  // 보스 시간(ms)
+function updateBoss(dt){
   const prev = state.boss.t;
-  state.boss.t += dt * 1000;
+  state.boss.t += dt*1000;
   const t = state.boss.t;
-
-  // 총 20초 상주
-  // 페이즈1: 0~10s, 페이즈2: 10~20s
-  // 겹침 방지: 400~800ms 주기로 링/스파이럴 번갈아 발사
   const phase2 = (t >= 10000);
 
-  // 트리거 간격
-  const cycle = phase2 ? 500 : 700;      // 발사 주기(느긋하게)
-  if (Math.floor(t / cycle) !== Math.floor(prev / cycle)) {
-    // 토글에 따라 번갈아 발사
-    if ((state.bossToggle++ % 2) === 0) {
-      // 링
-      if (!phase2) {
-        bossRing(W / 2, H / 2, 16, 2.2, 8, '#38bdf8');
-      } else {
-        bossRing(W / 2, H / 2, 22, 2.4, 12, '#34d399');
-      }
+  // Easy: alternate ring/spiral, slow cadence
+  const cycle = phase2 ? 750 : 900;
+  if (Math.floor(t/cycle) !== Math.floor(prev/cycle)){
+    if ((state.boss.toggle++ % 2) === 0){
+      if (!phase2) bossRing(W/2,H/2,12,1.8,10,'#38bdf8');
+      else         bossRing(W/2,H/2,16,2.0,14,'#34d399');
     } else {
-      // 스파이럴
-      if (!phase2) {
-        bossSpiral(W / 2, H / 2, 0.34, 10, 2.0, '#c084fc');
-      } else {
-        bossSpiral(W / 2, H / 2, 0.46, 12, 2.2, '#f472b6');
-      }
+      if (!phase2) bossSpiral(W/2,H/2,0.32,8,1.7,'#c084fc');
+      else         bossSpiral(W/2,H/2,0.44,10,1.9,'#f472b6');
     }
   }
-
-  if (t >= 20000) endBossPhase(); // 정확히 20s에 종료
+  if (t >= 20000) endBossPhase();
 }
 
-function update(dt) {
+function update(dt){
   if (!state.run) return;
 
-  // 시간 누적(ms)
-  state.time += dt * 1000;
+  // time
+  state.time += dt*1000;
 
-  // 이동
+  // move
   const a = inputAxis();
-  state.player.x += a.x * state.player.speed * dt;
-  state.player.y += a.y * state.player.speed * dt;
+  state.player.x += a.x*state.player.speed*dt;
+  state.player.y += a.y*state.player.speed*dt;
   state.player.x = Math.max(state.player.r, Math.min(W - state.player.r, state.player.x));
   state.player.y = Math.max(state.player.r, Math.min(H - state.player.r, state.player.y));
 
-  // 30초마다 MaxHP +10
-  state.growthT += dt * 1000;
-  if (state.growthT >= CFG.growthMs) { state.growthT -= CFG.growthMs; state.maxHP += CFG.growthAmount; updateHUD(); }
+  // growth
+  state.growthT += dt*1000;
+  if (state.growthT >= CFG.growthMs){ state.growthT -= CFG.growthMs; state.maxHP += CFG.growthAmount; updateHUD(); }
 
-  // 힐팩 스폰(자연 소멸 없음)
-  state.itemT += dt * 1000;
-  if (state.itemT >= CFG.healPackSpawnMs) {
+  // heal packs
+  state.itemT += dt*1000;
+  if (state.itemT >= CFG.healPackSpawnMs){
     state.itemT -= CFG.healPackSpawnMs;
-    state.items.push(new Heal(10 + Math.random() * (W - 20), 10 + Math.random() * (H - 20)));
+    state.items.push(new Heal(10+Math.random()*(W-20), 10+Math.random()*(H-20)));
   }
 
-  // 보스/스폰
+  // boss / field
   tryStartBoss();
-  if (state.boss.active) {
+  if (state.boss.active){
     updateBoss(dt);
   } else {
-    state.spawnT += dt * 1000;
-    state.diffT += dt * 1000;
-    if (state.spawnT >= state.spawnMs) {
+    state.spawnT += dt*1000;
+    state.diffT += dt*1000;
+    if (state.spawnT >= state.spawnMs){
       state.spawnT -= state.spawnMs;
-      state.bullets.push(Bullet.aimedFromEdge(state.player.x, state.player.y, state.score));
-      state.bullets.push(Bullet.aimedFromEdge(state.player.x, state.player.y, state.score));
+      state.bullets.push(Bullet.aimedFromEdge(state.player.x, state.player.y, state.score)); // 한 발만
     }
-    if (state.diffT >= 4200) {
-      state.diffT -= 4200;
-      if (state.score < state.freezeAfter) state.spawnMs = Math.max(state.minMs, state.spawnMs - 55);
+    if (state.diffT >= 4800){
+      state.diffT -= 4800;
+      if (state.score < CFG.freezeAfter) state.spawnMs = Math.max(CFG.minMs, state.spawnMs - 40);
     }
   }
 
-  // 탄 이동/충돌
+  // bullets
   for (const b of state.bullets) b.step(dt);
   state.bullets = state.bullets.filter(b => b.in());
-  for (const b of state.bullets) {
-    const dx = b.x - state.player.x, dy = b.y - state.player.y;
-    if (Math.hypot(dx, dy) < b.r + state.player.r) {
+  for (const b of state.bullets){
+    const dx=b.x-state.player.x, dy=b.y-state.player.y;
+    if (Math.hypot(dx,dy) < b.r + state.player.r){
       state.player.hp -= b.dmg; b.y = 9999;
       if (state.player.hp <= 0) break;
     }
   }
 
-  // 힐팩 획득(먹으면 즉시 제거)
-  for (const it of state.items) {
-    if (Math.hypot(it.x - state.player.x, it.y - state.player.y) < it.r + state.player.r) {
+  // heals
+  for (const it of state.items){
+    if (Math.hypot(it.x-state.player.x, it.y-state.player.y) < it.r + state.player.r){
       const missing = state.maxHP - state.player.hp;
-      const healAmt = Math.round(missing * CFG.healMissingPct) + CFG.healPackFlat; // 잃은 체력 기준
-      heal(healAmt);
-      it.picked = true;
+      const healAmt = Math.round(missing*CFG.healMissingPct) + CFG.healPackFlat;
+      heal(healAmt); it.picked = true;
     }
   }
   state.items = state.items.filter(it => !it.picked && !it.expired());
 
-  // 점수/HUD/사망
-  state.score += 50 * dt;   // 1초에 50점
-  // 시간 기반 골드 지급
-  while (state.time >= state.nextGoldTime) {
-    grantGold(CFG.goldPerPayout);
+  // score & timed gold
+  state.score += CFG.scorePerSec * dt;
+  while (state.time >= state.nextGoldTime){
+    grantGold(CFG.goldPerPayout);      // async, 루프는 다음 tick에서 계속
     state.nextGoldTime += state.goldInterval;
   }
 
@@ -373,52 +365,65 @@ function update(dt) {
   if (state.player.hp <= 0) gameOver();
 }
 
-function draw() {
-  ctx.clearRect(0, 0, W, H);
-  // 경계
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, W, 4);
-  ctx.fillRect(0, 0, 4, H);
-  ctx.fillRect(W - 4, 0, 4, H);
-  ctx.fillRect(0, H - 4, W, 4);
+//////////////////// Draw ////////////////////
+function stripePattern(colors){
+  const off=document.createElement('canvas'); off.width=16; off.height=16;
+  const c=off.getContext('2d');
+  c.fillStyle=colors[0]; c.fillRect(0,0,16,16);
+  c.fillStyle=colors[1]; c.beginPath();
+  c.moveTo(0,8); c.lineTo(8,0); c.lineTo(16,8); c.lineTo(8,16); c.closePath(); c.fill();
+  return ctx.createPattern(off,'repeat');
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // border
+  ctx.fillStyle='#fff';
+  ctx.fillRect(0,0,W,4); ctx.fillRect(0,0,4,H);
+  ctx.fillRect(W-4,0,4,H); ctx.fillRect(0,H-4,W,4);
 
-  // 플레이어(스킨 적용)
+  // player
   const skinId = (window.GameConfig && window.GameConfig.selectedSkin) ? window.GameConfig.selectedSkin : 'white';
-  if (skinId !== cachedSkinId) { painter = makePainter(skinId); cachedSkinId = skinId; }
+  if (skinId !== cachedSkinId){ painter = makePainter(skinId); cachedSkinId = skinId; }
   painter();
 
-  // 탄/힐팩
-  for (const b of state.bullets) {
-    ctx.fillStyle = b.clr; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
-  }
-  for (const it of state.items) {
-    ctx.fillStyle = '#ff6ec7';
+  // bullets & heals
+  for (const b of state.bullets){ ctx.fillStyle=b.clr; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
+  for (const it of state.items){
+    ctx.fillStyle='#ff6ec7';
     ctx.beginPath();
-    ctx.arc(it.x - 3, it.y - 3, 4, 0, Math.PI * 2);
-    ctx.arc(it.x + 3, it.y - 3, 4, 0, Math.PI * 2);
-    ctx.moveTo(it.x - 7, it.y - 1);
-    ctx.lineTo(it.x, it.y + 8);
-    ctx.lineTo(it.x + 7, it.y - 1);
-    ctx.closePath();
-    ctx.fill();
+    ctx.arc(it.x-3,it.y-3,4,0,Math.PI*2);
+    ctx.arc(it.x+3,it.y-3,4,0,Math.PI*2);
+    ctx.moveTo(it.x-7,it.y-1);
+    ctx.lineTo(it.x, it.y+8);
+    ctx.lineTo(it.x+7,it.y-1);
+    ctx.closePath(); ctx.fill();
   }
 }
 
-// ───────────────── 루프/버튼 ─────────────────
-let last = 0, raf = 0;
-function loop(ts) {
-  const dt = Math.min(0.05, (ts - (last || ts)) / 1000);
+//////////////////// Loop & Buttons ////////////////////
+let last=0, raf=0;
+function loop(ts){
+  const dt = Math.min(0.05, (ts - (last || ts))/1000);
   last = ts; update(dt); draw();
   if (state.run) raf = requestAnimationFrame(loop);
 }
-function startGame() {
-  const over = document.getElementById('over');
-  const menu = document.getElementById('mainMenu');
-  const wrap = document.getElementById('gameWrap');
+async function loadGoldAtStart(){
+  const res = await serverGetGold().catch(()=>null);
+  if (res && res.ok) { state.gold = res.total|0; updateHUD(); }
+  else {
+    const t = document.getElementById('saveToast');
+    if (t) { t.textContent = 'Login to save gold'; setTimeout(()=>t.textContent='', 2000); }
+  }
+}
+function startGame(){
+  const over=document.getElementById('over');
+  const menu=document.getElementById('mainMenu');
+  const wrap=document.getElementById('gameWrap');
   if (over) over.classList.add('hidden');
   if (menu) menu.classList.add('hidden');
   if (wrap) wrap.classList.remove('hidden');
-  reset(); last = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+  reset(); last=0; cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+  loadGoldAtStart(); // 서버에서 현재 골드 로드
 }
 window.startGame = startGame;
 

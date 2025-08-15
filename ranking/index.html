@@ -30,39 +30,43 @@
 
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-    const supa = createClient('https://pecoerlqanocydrdovbb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs');
+    const supa = createClient(
+      'https://pecoerlqanocydrdovbb.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs'
+    );
 
-    async function loadViaView() { return await supa.from('top_scores').select('user_id,score'); }
-    async function loadViaClientFallback() {
+    async function loadViaView(){ return await supa.from('top_scores').select('user_id,score'); }
+    async function loadViaClientFallback(){
       const r = await supa.from('scores').select('user_id,score').order('score', {ascending:false}).limit(500);
       if (r.error) return r;
       const bestMap = new Map();
-      for (const s of r.data) { const cur = bestMap.get(s.user_id); if (!cur || s.score>cur) bestMap.set(s.user_id, s.score); }
+      for (const s of r.data){ const cur = bestMap.get(s.user_id); if (!cur || s.score>cur) bestMap.set(s.user_id, s.score); }
       const rows = Array.from(bestMap.entries()).map(([user_id,score])=>({user_id,score})).sort((a,b)=>b.score-a.score);
       return { data: rows };
     }
 
-    async function load() {
+    async function load(){
       const list = document.getElementById('list');
       let res = await loadViaView(); if (res.error) res = await loadViaClientFallback();
-      if (res.error) { list.textContent='불러오기 실패: '+res.error.message; return; }
-      const rows = res.data; if (!rows.length) { list.textContent='아직 점수가 없습니다.'; return; }
+      if (res.error){ list.textContent='불러오기 실패: '+res.error.message; return; }
+      const rows = res.data; if (!rows.length){ list.textContent='아직 점수가 없습니다.'; return; }
 
       const ids = rows.map(r=>r.user_id);
       const profs = await supa.from('profiles').select('user_id,nickname,tag,avatar_url').in('user_id', ids);
-      if (profs.error) { list.textContent='프로필 불러오기 실패: '+profs.error.message; return; }
+      if (profs.error){ list.textContent='프로필 불러오기 실패: '+profs.error.message; return; }
       const pm = new Map(profs.data.map(p=>[p.user_id,p]));
 
       list.innerHTML = rows.map((s,i)=>{
         const p = pm.get(s.user_id);
         const nameTag = p ? (p.nickname + '#' + p.tag) : 'Unknown';
-        const avatar = p && p.avatar_url ? `<img src="\${p.avatar_url}" class="avatar" alt=""/>` : `<div class="avatar">🙂</div>`;
-        return `<div class="card">
-          <div class="muted" style="width:28px;text-align:right;">\${i+1}</div>
-          \${avatar}
-          <div class="name">\${nameTag}</div>
-          <div class="score">\${s.score}</div>
-        </div>`;
+        const avatar = p && p.avatar_url ? `<img src="${p.avatar_url}" class="avatar" alt=""/>` : `<div class="avatar">🙂</div>`;
+        return `
+          <div class="card">
+            <div class="muted" style="width:28px;text-align:right;">${i+1}</div>
+            ${avatar}
+            <div class="name">${nameTag}</div>
+            <div class="score">${s.score}</div>
+          </div>`;
       }).join('');
     }
     load();

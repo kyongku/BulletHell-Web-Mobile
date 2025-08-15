@@ -6,13 +6,10 @@
   <title>로그인 — BulletHell</title>
   <link rel="stylesheet" href="style.css"/>
   <style>
-    :root {
-      --card: #0e0f12;
-      --card-bd: #1f2230;
-    }
-    body { margin:0; color:#e7e7ea; background:#0b0c10; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple SD Gothic Neo, Noto Sans KR, "맑은 고딕", Malgun Gothic, sans-serif; }
+    :root { --card:#0e0f12; --card-bd:#1f2230; }
+    body { margin:0; color:#e7e7ea; background:#0b0c10; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple SD Gothic Neo, Noto Sans KR, "맑은 고딕", Malgun Gothic, sans-serif; }
     main.login { display:grid; place-items:center; padding:24px 14px; min-height:100dvh; }
-    .box { width:min(92vw,480px); background:var(--card); border:1px solid var(--card-bd); border-radius:12px; padding:18px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+    .box { width:min(92vw,480px); background:var(--card); border:1px solid var(--card-bd); border-radius:12px; padding:18px; box-shadow:0 8px 30px rgba(0,0,0,.35); }
     .title { font-weight:800; margin:0 0 10px 0; letter-spacing:.2px; }
     .row { display:grid; gap:8px; }
     label.muted { font-size:12px; opacity:.75; }
@@ -21,7 +18,6 @@
     .actions { display:flex; gap:8px; margin-top:10px; }
     button { border:0; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:700; }
     button.primary { background:#4f7cff; color:white; }
-    button.primary:active { transform: translateY(1px); }
     button.secondary { background:#23283a; color:#d7d8de; }
     button.ghost { background:transparent; color:#aab0c6; border:1px solid #343a53; }
     .muted { color:#aab0c6; font-size:12px; min-height:16px; }
@@ -62,83 +58,49 @@
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-    // 1) 세션 영구저장/자동갱신 OFF + sessionStorage만 사용 (새로고침/탭 재시작 시 로그인 화면 유지)
+    // 세션을 sessionStorage에 저장(같은 탭에서 페이지 이동 시 유지)
     const supa = createClient(
       'https://pecoerlqanocydrdovbb.supabase.co',
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs',
       {
         auth: {
-          persistSession: false,
-          autoRefreshToken: false,
+          persistSession: true,
+          autoRefreshToken: true,
           storage: window.sessionStorage
         }
       }
     );
 
-    // 2) 로그인 페이지 진입 시, 혹시 남아있을 수 있는 이전 세션/로컬 키 정리
-    (async () => {
-      try { await supa.auth.signOut(); } catch (e) { /* ignore */ }
-      try {
-        Object.keys(localStorage).forEach(k => {
-          if (k.startsWith('sb-')) localStorage.removeItem(k);
-        });
-      } catch (_) { /* ignore */ }
-    })();
-
-    // ====== DOM ======
     const email = document.getElementById('email');
     const pass  = document.getElementById('pass');
     const msg   = document.getElementById('msg');
     const nickArea  = document.getElementById('nickArea');
     const nickInput = document.getElementById('nick');
     const nickMsg   = document.getElementById('nickMsg');
+
     const genTag4 = () => String(Math.floor(1000 + Math.random()*9000));
 
-    // ====== 프로필(최초 1회) ======
     async function ensureProfile(user){
-      const { data: exist } = await supa
-        .from('profiles')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
+      const { data: exist } = await supa.from('profiles').select('user_id').eq('user_id', user.id).maybeSingle();
       if (exist) return true;
-
-      // 없으면 닉네임 설정 UI 표시
       nickArea.style.display = 'grid';
-
       return new Promise((resolve)=>{
         document.getElementById('btnNick').onclick = async ()=>{
           const name = (nickInput.value || '').trim();
-          if (!name || name.length < 2) { nickMsg.textContent = '2~12자 닉네임 입력'; return; }
-
-          // tag 중복 피하기
-          let tag = genTag4(), tries = 0, ok = false;
-          while(!ok && tries < 8){
-            const { data: t } = await supa
-              .from('profiles').select('user_id')
-              .eq('nickname', name).eq('tag', tag)
-              .maybeSingle();
-            if (!t) ok = true; else { tag = genTag4(); tries++; }
+          if (!name || name.length<2) { nickMsg.textContent='2~12자 닉네임 입력'; return; }
+          let tag=genTag4(), tries=0, ok=false;
+          while(!ok && tries<8){
+            const { data: t } = await supa.from('profiles').select('user_id').eq('nickname', name).eq('tag', tag).maybeSingle();
+            if (!t) ok=true; else { tag = genTag4(); tries++; }
           }
-
-          const row = {
-            user_id: user.id,
-            nickname: name,
-            tag,
-            gold: 0,
-            selected_skin: 'white',
-            unlocked_skins: ['white']
-          };
+          const row = { user_id:user.id, nickname:name, tag, gold:0, selected_skin:'white', unlocked_skins:['white'] };
           const { error } = await supa.from('profiles').insert([row]);
-          if (error){ nickMsg.textContent = '실패: ' + error.message; return; }
-
+          if (error){ nickMsg.textContent = '실패: '+error.message; return; }
           resolve(true);
         };
       });
     }
 
-    // ====== 로그인 완료 후 이동 ======
     async function postLogin(){
       const { data: { user } } = await supa.auth.getUser();
       if (!user) return;
@@ -146,30 +108,25 @@
       location.href = './index.html';
     }
 
-    // ====== 버튼 핸들러 ======
     document.getElementById('btnLogin').onclick = async ()=>{
       msg.textContent = '로그인 중...';
-      const { error } = await supa.auth.signInWithPassword({
-        email: email.value,
-        password: pass.value
-      });
-      if (error) { msg.textContent = '실패: ' + error.message; return; }
-      msg.textContent = '완료';
-      await postLogin();
+      const { error } = await supa.auth.signInWithPassword({ email: email.value, password: pass.value });
+      if (error) { msg.textContent = '실패: '+error.message; return; }
+      msg.textContent = '완료'; await postLogin();
     };
 
     document.getElementById('btnSignup').onclick = async ()=>{
       msg.textContent = '가입 중...';
-      const { error } = await supa.auth.signUp({
-        email: email.value,
-        password: pass.value
-      });
-      if (error) { msg.textContent = '실패: ' + error.message; return; }
+      const { error } = await supa.auth.signUp({ email: email.value, password: pass.value });
+      if (error) { msg.textContent = '실패: '+error.message; return; }
       msg.textContent = '가입 완료. 메일 확인 후 다시 로그인하세요.';
     };
 
-    // 3) 자동 리다이렉트 IIFE **삭제** (세션 있어도 이 페이지에 머무르게)
-    // (원래 있던: getUser() → index.html 리다이렉트 코드 제거)
+    // 이미 로그인된 상태면 자동으로 게임으로 넘김
+    (async ()=>{
+      const { data: { session } } = await supa.auth.getSession();
+      if (session) location.href='./index.html';
+    })();
   </script>
 </body>
 </html>

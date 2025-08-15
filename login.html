@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css"/>
   <style>
     :root { --card:#0e0f12; --card-bd:#1f2230; }
-    body { margin:0; color:#e7e7ea; background:#0b0c10; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple SD Gothic Neo, Noto Sans KR, "맑은 고딕", Malgun Gothic, sans-serif; }
+    body { margin:0; color:#e7e7ea; background:#0b0c10; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans KR", "맑은 고딕", sans-serif; }
     main.login { display:grid; place-items:center; padding:24px 14px; min-height:100dvh; }
     .box { width:min(92vw,480px); background:var(--card); border:1px solid var(--card-bd); border-radius:12px; padding:18px; box-shadow:0 8px 30px rgba(0,0,0,.35); }
     .title { font-weight:800; margin:0 0 10px 0; letter-spacing:.2px; }
@@ -58,7 +58,7 @@
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-    // 세션을 sessionStorage에 저장(같은 탭에서 페이지 이동 시 유지)
+    // 같은 "탭" 범위에서만 세션 유지 (자동로그인 방지)
     const supa = createClient(
       'https://pecoerlqanocydrdovbb.supabase.co',
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs',
@@ -122,10 +122,14 @@
       msg.textContent = '가입 완료. 메일 확인 후 다시 로그인하세요.';
     };
 
-    // 이미 로그인된 상태면 자동으로 게임으로 넘김
+    // 이미 로그인 상태면 게임으로 (루프 방지용 소폭 지연)
     (async ()=>{
+      await new Promise(r=>setTimeout(r, 60));
       const { data: { session } } = await supa.auth.getSession();
-      if (session) location.href='./index.html';
+      if (session) {
+        await new Promise(r=>setTimeout(r, 40));
+        location.href='./index.html';
+      }
     })();
   </script>
 </body>

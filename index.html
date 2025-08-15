@@ -109,11 +109,23 @@
     </div>
   </div>
 
+  <!-- ===== Supabase + 페이지 로직 (전역 주입 & sessionStorage 사용) ===== -->
   <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-    const supa = createClient(
+    // ★ window.supabase에 모듈 전역 주입 (game.js가 동일 모듈을 사용하도록)
+    import * as supabaseLib from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+    window.supabase = supabaseLib;
+
+    // 같은 "탭" 내에서만 세션 유지
+    const supa = window.supabase.createClient(
       'https://pecoerlqanocydrdovbb.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs'
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs',
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          storage: window.sessionStorage
+        }
+      }
     );
 
     // --------- 유틸/상태 ----------
@@ -174,6 +186,7 @@
 
     // --------- 초기화 ----------
     (async () => {
+      // 세션을 sessionStorage로 쓰기 때문에, 같은 탭이라면 바로 읽힘
       const { data: { user } } = await supa.auth.getUser();
       if (!user) { location.href = './login.html'; return; }
       currentUser = user;
@@ -387,6 +400,8 @@
       setTimeout(()=> t.textContent = '', 2500);
     }
   </script>
+
+  <!-- game.js는 전역 window.supabase를 사용해 같은 설정으로 createClient 함 -->
   <script type="module" src="./game.js"></script>
 </body>
 </html>

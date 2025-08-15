@@ -1,9 +1,11 @@
-// game.js — BulletHell Mobile (요청 반영본)
+// game.js — BulletHell Mobile (완화 패치본)
+// - 점수: 1초에 50점
+// - 보스: 3,000점마다 등장(= 1분 주기), 정확히 20초 상주
+// - 보스 난이도 완화: 속도/탄수/주기/데미지 낮춤
 // - 힐팩: "잃은 체력의 10% + 7" 회복, 먹으면 즉시 사라짐(자연 소멸 없음)
-// - 일반탄 속도 ×10, 보스탄 속도 ×3
 // - 30초마다 MaxHP +10, 힐팩 주기 스폰
 // - 탄속은 점수 비례 증가(10,000점에서 고정), 스폰속도는 12,000점까지 가속 후 고정
-// - 보스: 3,000점마다 페이즈, 보스 클리어 콜백 GameInterop.onBossClear(n)
+// - 보스 클리어 콜백 GameInterop.onBossClear(n)
 // - HUD는 index.html에서 관리(HP 바/텍스트/점수)
 
 const W = 350, H = 350;
@@ -21,14 +23,14 @@ const CFG = {
   // 탄속: 기본/기울기 + 배율
   bulletSpeedBase: 10.0,
   bulletSpeedScale: 1 / 3000,
-  normalSpeedMult: 5,     // 일반탄 속도 ×10
-  bossSpeedMult: 9,        // 보스탄 속도 ×20
+  normalSpeedMult: 5,      // 일반탄 배율(필드 난도는 유지)
+  bossSpeedMult: 5,        // ▼ 보스탄 속도 완화(기존 9 → 5)
 
-  // 데미지
+  // 데미지(보스 완화)
   normalBulletDmg: 7,
-  bossBaseDmg: 10,
-  bossDmgStep: 2,
-  bossDmgEveryMs: 3000
+  bossBaseDmg: 7,          // ▼ 10 → 7
+  bossDmgStep: 1,          // ▼ 2 → 1
+  bossDmgEveryMs: 4000     // ▼ 3000 → 4000
 };
 
 // ───────────────── 입력(모바일 조이스틱 + 키보드) ─────────────────
@@ -108,7 +110,7 @@ class Bullet {
     const dx = px - x, dy = py - y, len = Math.hypot(dx, dy) || 1;
     const capScore = Math.min(score, 10000); // 1만점에서 탄속 증가 고정
     const baseSp = CFG.bulletSpeedBase + capScore * CFG.bulletSpeedScale;
-    const sp = baseSp * CFG.normalSpeedMult; // 일반탄 ×10
+    const sp = baseSp * CFG.normalSpeedMult; // 일반탄
     return new Bullet(x, y, dx / len * sp, dy / len * sp, 4.5, '#ff4b4b', CFG.normalBulletDmg, false);
   }
 }
@@ -124,7 +126,7 @@ function bossDmg() {
   return CFG.bossBaseDmg + step * CFG.bossDmgStep;
 }
 function bossRing(cx, cy, count, speed, radius, clr) {
-  const s = speed * CFG.bossSpeedMult; // 보스탄 ×3
+  const s = speed * CFG.bossSpeedMult; // 완화된 보스탄 속도
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2;
     const x = cx + Math.cos(a) * radius, y = cy + Math.sin(a) * radius;
@@ -133,7 +135,7 @@ function bossRing(cx, cy, count, speed, radius, clr) {
   }
 }
 function bossSpiral(cx, cy, step, count, speed, clr) {
-  const s = speed * CFG.bossSpeedMult; // 보스탄 ×3
+  const s = speed * CFG.bossSpeedMult; // 완화된 보스탄 속도
   const start = performance.now();
   for (let i = 0; i < count; i++) {
     const a = (i * step) + start / 700;
@@ -143,7 +145,6 @@ function bossSpiral(cx, cy, step, count, speed, clr) {
 }
 
 // ───────────────── 패턴 스킨(선택) ─────────────────
-// index.html에서 window.GameConfig.selectedSkin 제공 시 반영
 let cachedSkinId = null, painter = makePainter('white');
 function makePainter(id) {
   return function drawPlayer() {
@@ -151,7 +152,6 @@ function makePainter(id) {
     ctx.translate(state.player.x, state.player.y);
     ctx.beginPath(); ctx.arc(0, 0, state.player.r, 0, Math.PI * 2);
     switch (id) {
-      // Normal
       case 'white': ctx.fillStyle = '#ffffff'; break;
       case 'mint': ctx.fillStyle = '#7ef5d1'; break;
       case 'sky': ctx.fillStyle = '#7ecbff'; break;
@@ -159,10 +159,8 @@ function makePainter(id) {
       case 'orange': ctx.fillStyle = '#ffb36b'; break;
       case 'violet': ctx.fillStyle = '#ba8bff'; break;
       case 'aqua': ctx.fillStyle = '#6bfffb'; break;
-      // Rare stripes
       case 'stripe-mint-sky': ctx.fillStyle = stripePattern(['#7ef5d1', '#7ecbff']); break;
       case 'stripe-orange-violet': ctx.fillStyle = stripePattern(['#ffb36b', '#ba8bff']); break;
-      // Epic gradients
       case 'grad-sunrise': {
         const g = ctx.createLinearGradient(-10, -10, 10, 10);
         g.addColorStop(0, '#ff9a9e'); g.addColorStop(0.5, '#fad0c4'); g.addColorStop(1, '#ffd1ff'); ctx.fillStyle = g; break;
@@ -171,13 +169,11 @@ function makePainter(id) {
         const g = ctx.createLinearGradient(-10, -10, 10, 10);
         g.addColorStop(0, '#36d1dc'); g.addColorStop(1, '#5b86e5'); ctx.fillStyle = g; break;
       }
-      // Legendary
       case 'stripe-gold-silver': ctx.fillStyle = stripePattern(['#ffd700', '#c0c0c0']); break;
       case 'grad-sunset': {
         const g = ctx.createLinearGradient(-10, 0, 10, 0);
         g.addColorStop(0, '#0b486b'); g.addColorStop(1, '#f56217'); ctx.fillStyle = g; break;
       }
-      // GOD
       case 'god-rainbow': {
         const g = ctx.createLinearGradient(-10, 0, 10, 0);
         const colors = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
@@ -228,21 +224,38 @@ function tryStartBoss() {
 function endBossPhase() {
   state.boss.active = false;
   if (window.GameInterop && typeof window.GameInterop.onBossClear === 'function') {
-    window.GameInterop.onBossClear(state.boss.count); // 3번째부터 보상 지급은 상위 로직에서 처리
+    window.GameInterop.onBossClear(state.boss.count); // 보상은 상위 로직에서 처리
   }
 }
 
 function updateBoss(dt) {
   state.boss.t += dt * 1000;
   const t = state.boss.t;
-  if (t < 8000) {
-    if (Math.floor(t / 600) !== Math.floor((t - dt * 1000) / 600)) bossRing(W / 2, H / 2, 20, 2.6, 6, '#38bdf8');
-    if (Math.floor(t / 120) !== Math.floor((t - dt * 1000) / 120)) bossSpiral(W / 2, H / 2, 0.35, 12, 2.4, '#c084fc');
-  } else if (t < 16000) {
-    if (Math.floor(t / 450) !== Math.floor((t - dt * 1000) / 450)) bossRing(W / 2, H / 2, 28, 2.9, 12, '#34d399');
-    if (Math.floor(t / 100) !== Math.floor((t - dt * 1000) / 100)) bossSpiral(W / 2, H / 2, 0.5, 18, 2.6, '#f472b6');
+
+  // 0s ~ 10s : 페이즈 1 (완화)
+  if (t < 10000) {
+    // 링: 700ms마다 16발, 속도 낮음 + 반경 약간 크게
+    if (Math.floor(t / 700) !== Math.floor((t - dt * 1000) / 700)) {
+      bossRing(W / 2, H / 2, 16, 2.2, 8, '#38bdf8');
+    }
+    // 스파이럴: 140ms마다 10발, 속도 낮음
+    if (Math.floor(t / 140) !== Math.floor((t - dt * 1000) / 140)) {
+      bossSpiral(W / 2, H / 2, 0.35, 10, 2.0, '#c084fc');
+    }
+
+  // 10s ~ 20s : 페이즈 2 (완화)
+  } else if (t < 20000) {
+    // 링: 550ms마다 24발
+    if (Math.floor(t / 550) !== Math.floor((t - dt * 1000) / 550)) {
+      bossRing(W / 2, H / 2, 24, 2.5, 12, '#34d399');
+    }
+    // 스파이럴: 120ms마다 14발
+    if (Math.floor(t / 120) !== Math.floor((t - dt * 1000) / 120)) {
+      bossSpiral(W / 2, H / 2, 0.48, 14, 2.2, '#f472b6');
+    }
+
   } else {
-    endBossPhase();
+    endBossPhase(); // 정확히 20초에 종료
   }
 }
 
@@ -308,7 +321,7 @@ function update(dt) {
   state.items = state.items.filter(it => !it.picked && !it.expired());
 
   // 점수/HUD/사망
-  state.score += 70 * dt;
+  state.score += 50 * dt;   // ▼ 70 → 50 (1초에 50점)
   updateHUD();
   if (state.player.hp <= 0) gameOver();
 }

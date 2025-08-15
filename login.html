@@ -42,19 +42,22 @@
 
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-    const supa = createClient('https://pecoerlqanocydrdovbb.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs');
+    const supa = createClient(
+      'https://pecoerlqanocydrdovbb.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs'
+    );
 
     const email = document.getElementById('email');
     const pass  = document.getElementById('pass');
     const msg   = document.getElementById('msg');
-    const nickArea = document.getElementById('nickArea');
+    const nickArea  = document.getElementById('nickArea');
     const nickInput = document.getElementById('nick');
-    const nickMsg = document.getElementById('nickMsg');
+    const nickMsg   = document.getElementById('nickMsg');
 
     const genTag4 = () => String(Math.floor(1000 + Math.random()*9000));
 
     async function ensureProfile(user){
-      const { data: exist } = await supa.from('profiles').select('user_id,nickname,tag').eq('user_id', user.id).maybeSingle();
+      const { data: exist } = await supa.from('profiles').select('user_id').eq('user_id', user.id).maybeSingle();
       if (exist) return true;
       nickArea.style.display = 'grid';
       return new Promise((resolve)=>{
@@ -62,12 +65,13 @@
           const name = nickInput.value.trim();
           if (!name || name.length<2) { nickMsg.textContent='2~12자 닉네임 입력'; return; }
           let tag=genTag4(), tries=0, ok=false;
-          while(!ok && tries<8) {
+          while(!ok && tries<8){
             const { data: t } = await supa.from('profiles').select('user_id').eq('nickname', name).eq('tag', tag).maybeSingle();
             if (!t) ok=true; else { tag = genTag4(); tries++; }
           }
-          const { error } = await supa.from('profiles').insert([{ user_id:user.id, nickname:name, tag }]);
-          if (error) { nickMsg.textContent = '실패: '+error.message; return; }
+          const row = { user_id:user.id, nickname:name, tag, gold:0, selected_skin:'white', unlocked_skins:['white'] };
+          const { error } = await supa.from('profiles').insert([row]);
+          if (error){ nickMsg.textContent = '실패: '+error.message; return; }
           resolve(true);
         };
       });

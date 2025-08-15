@@ -54,11 +54,11 @@ const ALL_SKINS = [
 ];
 
 const GRADE_POOL = [
-  { grade:'GOD', p:0.005, skins:ALL_SKINS.filter(s=>s.grade==='GOD') },
-  { grade:'L',   p:0.02,  skins:ALL_SKINS.filter(s=>s.grade==='L') },
-  { grade:'E',   p:0.075, skins:ALL_SKINS.filter(s=>s.grade==='E') },
-  { grade:'R',   p:0.20,  skins:ALL_SKINS.filter(s=>s.grade==='R') },
-  { grade:'N',   p:0.70,  skins:ALL_SKINS.filter(s=>s.grade==='N') },
+  { grade:'GOD', p:0.0005, skins:ALL_SKINS.filter(s=>s.grade==='GOD') },
+  { grade:'L',   p:0.0045,  skins:ALL_SKINS.filter(s=>s.grade==='L') },
+  { grade:'E',   p:0.045, skins:ALL_SKINS.filter(s=>s.grade==='E') },
+  { grade:'R',   p:0.15,  skins:ALL_SKINS.filter(s=>s.grade==='R') },
+  { grade:'N',   p:0.80,  skins:ALL_SKINS.filter(s=>s.grade==='N') },
 ];
 
 function pickGacha() {

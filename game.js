@@ -11,29 +11,29 @@ const W = 350, H = 350;
 const CFG = {
   // HP & heal
   growthMs: 30000,
-  growthAmount: 10,
+  growthAmount: 5,
   healMissingPct: 0.10,
   healPackFlat: 7,
   healPackSpawnMs: 9000,
 
   // Bullet speed
-  bulletSpeedBase: 10.0,
+  bulletSpeedBase: 20.0,
   bulletSpeedScale: 1 / 3000,
   normalSpeedMult: 5,
 
   // Boss difficulty (easy)
   bossSpeedMult: 20,
-  bossBaseDmg: 6,
-  bossDmgStep: 1,
-  bossDmgEveryMs: 5000,
+  bossBaseDmg: 10,
+  bossDmgStep: 2,
+  bossDmgEveryMs: 6000,
 
   // Field spawn easing
-  minMs: 300,
-  freezeAfter: 12000,
+  minMs: 200,
+  freezeAfter: 18000,
 
   // Score & gold
   scorePerSec: 50,
-  goldFirstMs: 20000,    // first payout at 20s
+  goldFirstMs: 80000,    // first payout at 1m 20s
   goldIntervalMs: 60000, // 1 min
   goldPerPayout: 10,
 

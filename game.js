@@ -173,7 +173,7 @@ const LASER = {
   widthWarn: 10,
   widthBeam: 7,
   dps: 45,
-  flashWarn: true
+  flashWarn: false
 };
 
 let telegraphs = [];   // {angle, t0, telegraphMs, beamMs}
@@ -234,7 +234,7 @@ function spawnLaser(angleRad, opts = {}) {
 }
 
 // 수정: 기본값을 45도 × 8발, 0.4초 간격으로
-function spawnRotatingSequence(startDeg = 0, count = 8, stepDeg = 45, intervalMs = 400, opts = {}) {
+function spawnRotatingSequence(startDeg = 0, count = 8, stepDeg = 45, intervalMs = 1000, opts = {}) {
   for (let i = 0; i < count; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     setTimeout(() => spawnLaser(a, opts), i * intervalMs);

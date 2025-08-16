@@ -527,6 +527,48 @@ function draw(){
   drawLasers(ctx);
 }
 
+//////////////////// Interop (저장 함수 내장) ////////////////////
+window.GameInterop = window.GameInterop || {};
+// 선택: 보스 클리어 훅
+window.GameInterop.onBossClear = window.GameInterop.onBossClear || function(_count){};
+
+// 점수 저장: rankings(메인) + scores(레거시)에도 남김
+window.GameInterop.saveScore = window.GameInterop.saveScore || async function(score, emojiFromHeader){
+  try{
+    ensureSupa();
+    const { data: { user } } = await supa.auth.getUser();
+    if (!user) return { ok:false, reason:'not_logged_in' };
+
+    // 프로필 정보 로드
+    const { data: prof, error: pErr } = await supa
+      .from('profiles')
+      .select('nickname, tag, selected_emoji')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (pErr || !prof) return { ok:false, reason:'no_profile' };
+
+    const emoji = (emojiFromHeader ?? prof.selected_emoji ?? '⭐');
+    const row = {
+      user_id: user.id,
+      nickname: prof.nickname,
+      tag: prof.tag,
+      emoji,
+      score: Math.floor(score|0)
+    };
+
+    // rankings에 저장 (RLS: user_id = auth.uid())
+    const { error: rErr } = await supa.from('rankings').insert(row);
+    if (rErr) return { ok:false, reason:rErr.message };
+
+    // 레거시 scores에도 남기기(실패 무시)
+    await supa.from('scores').insert({ user_id: user.id, score: row.score }).catch(()=>{});
+
+    return { ok:true };
+  }catch(e){
+    return { ok:false, reason: e?.message || 'unknown' };
+  }
+};
+
 //////////////////// Loop & Buttons ////////////////////
 let last=0, raf=0;
 function loop(ts){
@@ -559,7 +601,7 @@ function backToMain(){
   document.getElementById('gameWrap')?.classList.add('hidden');
   document.getElementById('mainMenu')?.classList.remove('hidden');
   document.getElementById('over')?.classList.add('hidden');
-  document.getElementById('topBar')?.classList.remove('hidden'); // ★ 헤더 다시 표시(메인에서만 상점/랭킹/뽑기)
+  document.getElementById('topBar')?.classList.remove('hidden'); // ★ 메인 헤더 복귀
   state.run = false;
   cancelAnimationFrame(raf);
 }

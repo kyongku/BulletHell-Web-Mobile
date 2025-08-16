@@ -1,4 +1,4 @@
-// main.js — 헤더/프로필/상점/랭킹 + Supabase (이모지 상점: 부족 골드 방지 완전 적용)
+// main.js — 헤더/프로필/상점/랭킹 + Supabase (이모지 상점: 부족 골드 방지 완전 적용 + buy_emoji 우선)
 (() => {
   'use strict';
 
@@ -39,7 +39,7 @@
     { id:'god-rainbow',  name:'GOD Rainbow'  }
   ];
 
-  // 이모지 상점 판매 목록 (원하면 자유롭게 수정)
+  // 이모지 상점 판매 목록
   const EMOJI_STORE = [
     { id:'e_star',       emoji:'⭐', name:'Star',       price:   0 },   // 기본 무료
     { id:'e_smile',      emoji:'😄', name:'Smile',      price: 100 },
@@ -159,15 +159,83 @@
     grid.querySelectorAll('[data-emoji]').forEach(btn => {
       btn.onclick = async () => {
         const emoji = btn.getAttribute('data-emoji');
-        if (!have.has(emoji) && emoji !== '⭐') return;
-        if (selected === emoji) return;
+        const ownSet = new Set(profile.unlocked_emojis || ['⭐']);
+        if (!ownSet.has(emoji) && emoji !== '⭐') return;
+        if ((profile.selected_emoji || '⭐') === emoji) return;
         const { error } = await supa.from('profiles').update({ selected_emoji: emoji }).eq('user_id', profile.user_id);
         if (!error) { profile.selected_emoji = emoji; applyHeaderUI(); buildEmojiGrid(); }
       };
     });
   }
 
-  // ========= Emoji Shop (서버 원자 차감) =========
+  // ========= Emoji 구매 RPC (우선 buy_emoji, 폴백 wallet_spend_gold) =========
+  async function safeBuyEmoji(item) {
+    // 0) 서버 잔액 동기화 (선택)
+    try {
+      const { data: total0 } = await supa.rpc('wallet_add_gold', { delta: 0 });
+      if (typeof total0 === 'number') profile.gold = total0;
+    } catch(_) {}
+
+    const price = Number(item.price|0);
+    if ((profile.gold|0) < price) {
+      return { ok:false, reason:'insufficient_local', message:'골드가 부족합니다!' };
+    }
+
+    // 1) 트랜잭션 RPC 우선 시도
+    try {
+      const { data: newTotal, error } = await supa.rpc('buy_emoji', {
+        p_emoji: item.emoji,
+        p_price: price
+      });
+      if (!error && typeof newTotal === 'number' && newTotal >= 0) {
+        // 서버가 언락까지 처리한 경우, 로컬 반영만
+        profile.gold = newTotal;
+        const next = Array.from(new Set([...(profile.unlocked_emojis || ['⭐']), item.emoji]));
+        profile.unlocked_emojis = next; // 서버도 이미 반영되어 있을 것
+        return { ok:true, newTotal };
+      }
+      // 함수가 없거나 권한 문제면 폴백 시도
+      if (error && !/insufficient_gold/i.test(error.message)) {
+        // 계속 진행해서 폴백으로
+      } else if (error && /insufficient_gold/i.test(error.message)) {
+        return { ok:false, reason:'insufficient', message:'골드가 부족합니다!' };
+      }
+    } catch (e) {
+      // 폴백 진행
+    }
+
+    // 2) 폴백: 원자적 차감 → unlocked_emojis 업데이트
+    try {
+      const { data: newTotal, error: spendErr } = await supa.rpc('wallet_spend_gold', { cost: price });
+      if (spendErr || typeof newTotal !== 'number' || newTotal < 0) {
+        if (spendErr && /insufficient_gold/i.test(spendErr.message)) {
+          return { ok:false, reason:'insufficient', message:'골드가 부족합니다!' };
+        }
+        return { ok:false, reason:'spend_fail', message:'구매 실패' + (spendErr ? `: ${spendErr.message}` : '') };
+      }
+
+      // 차감 성공 → 보유 이모지 저장
+      const next = Array.from(new Set([...(profile.unlocked_emojis || ['⭐']), item.emoji]));
+      const { error } = await supa.from('profiles')
+        .update({ unlocked_emojis: next })
+        .eq('user_id', profile.user_id);
+
+      if (error) {
+        // 이론상 여기까지 오면 드물지만 실패 가능 — 금고 차감은 되었으나 언락 저장 실패
+        // 상황 기록용 메시지 반환(사용자에게는 재시도 권고)
+        profile.gold = newTotal; // 일단 서버 잔액 반영
+        return { ok:false, reason:'unlock_fail', message:'저장 실패: ' + error.message };
+      }
+
+      profile.gold = newTotal;
+      profile.unlocked_emojis = next;
+      return { ok:true, newTotal };
+    } catch (e) {
+      return { ok:false, reason:'exception', message:'구매 실패: ' + (e?.message || 'exception') };
+    }
+  }
+
+  // ========= Emoji Shop (버튼 핸들러에 safeBuyEmoji 적용) =========
   function buildEmojiShop() {
     const grid = $('#emojiShopGrid'); if (!grid) return;
     const have = new Set(profile.unlocked_emojis || ['⭐']);
@@ -190,63 +258,26 @@
 
     grid.querySelectorAll('[data-buy]').forEach(btn => {
       btn.onclick = async () => {
-        // 중복 클릭 방지
         if (btn.disabled) return;
+
         const id = btn.getAttribute('data-buy');
         const item = EMOJI_STORE.find(x => x.id === id);
         if (!item) return;
 
-        // 이미 보유면 무시
         const owned = (profile.unlocked_emojis || []).includes(item.emoji) || item.price === 0;
         if (owned) return;
 
         btn.disabled = true;
 
-        // 1) (선택) 최신 잔액 동기화
-        try {
-          const { data: total0 } = await supa.rpc('wallet_add_gold', { delta: 0 });
-          if (typeof total0 === 'number') profile.gold = total0;
-        } catch (_) {}
+        const res = await safeBuyEmoji(item);
 
-        // 2) 로컬 선확인
-        if ((profile.gold|0) < (item.price|0)) {
-          console.log("골드 부족 체크 실행됨, 현재 골드:", profile.gold, "가격:", item.price);
-          toast('골드가 부족합니다!');
+        if (!res.ok) {
+          toast(res.message || '구매 실패');
           btn.disabled = false;
           return;
         }
 
-
-        // 3) 서버에서 원자적으로 차감 (뽑기와 동일한 방식)
-        const { data: newTotal, error: spendErr } =
-          await supa.rpc('wallet_spend_gold', { cost: item.price });
-
-        if (spendErr || typeof newTotal !== 'number') {
-          if (spendErr && /insufficient_gold/i.test(spendErr.message)) {
-            toast('골드가 부족합니다!');
-          } else {
-            toast('구매 실패' + (spendErr ? `: ${spendErr.message}` : ''));
-          }
-          btn.disabled = false;
-          return;
-        }
-
-        // 4) 차감 성공 → 보유 이모지 저장
-        profile.gold = newTotal;               // 서버가 계산한 최신 잔액
-        const next = Array.from(new Set([...(profile.unlocked_emojis || ['⭐']), item.emoji]));
-        const { error } = await supa.from('profiles')
-          .update({ unlocked_emojis: next })
-          .eq('user_id', profile.user_id);
-
-        if (error) {
-          toast('저장 실패: ' + error.message);
-          btn.disabled = false;
-          return;
-        }
-
-        profile.unlocked_emojis = next;
-
-        // 5) UI 갱신
+        // 성공
         applyHeaderUI();
         buildEmojiShop();
         buildEmojiGrid();
@@ -264,9 +295,14 @@
       .limit(50);
     if (error) { toast('랭킹 불러오기 실패'); return; }
     const list = $('#rankingList');
-    list.innerHTML = (data||[]).map((r,i)=>(
-      `<li><span class="rk">${i+1}</span> <span class="em">${r.emoji||'⭐'}</span> <span class="nm">${r.nickname||'user'}#${r.tag||'0000'}</span> <span class="sc">${r.score|0}</span></li>`
-    )).join('');
+    list.innerHTML = (data||[]).map((r,i)=>(`
+      <li>
+        <span class="rk">${i+1}</span>
+        <span class="em">${r.emoji||'⭐'}</span>
+        <span class="nm">${r.nickname||'user'}#${r.tag||'0000'}</span>
+        <span class="sc">${r.score|0}</span>
+      </li>
+    `)).join('');
     $('#rankingModal').showModal();
   }
 

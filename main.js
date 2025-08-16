@@ -1,4 +1,4 @@
-// main.js — 헤더/프로필/상점/랭킹 + Supabase
+// main.js — 헤더/프로필/상점/랭킹 + Supabase (이모지 상점: 부족 골드 방지 완전 적용)
 (() => {
   'use strict';
 
@@ -6,6 +6,7 @@
   const $ = sel => document.querySelector(sel);
   const show = el => el && el.classList.remove('hidden');
   const hide = el => el && el.classList.add('hidden');
+  const toast = (msg) => { const t = $('#saveToast'); if (t) { t.textContent = msg; setTimeout(()=>t.textContent='', 1800); } };
 
   // ========= Supabase =========
   const SUPABASE_URL  = "https://pecoerlqanocydrdovbb.supabase.co";
@@ -38,7 +39,7 @@
     { id:'god-rainbow',  name:'GOD Rainbow'  }
   ];
 
-  // 이모지 상점 판매 목록
+  // 이모지 상점 판매 목록 (원하면 자유롭게 수정)
   const EMOJI_STORE = [
     { id:'e_star',       emoji:'⭐', name:'Star',       price:   0 },   // 기본 무료
     { id:'e_smile',      emoji:'😄', name:'Smile',      price: 100 },
@@ -95,10 +96,10 @@
       .eq('user_id', uid)
       .order('score', { ascending:false })
       .limit(1);
-    if (!error && data && data.length) bestScore = data[0].score|0; else bestScore = 0;
+    bestScore = (!error && data && data.length) ? (data[0].score|0) : 0;
   }
 
-  // ========= UI bind =========
+  // ========= UI =========
   function applyHeaderUI() {
     const nameTag = (profile.nickname || 'user') + '#' + (profile.tag || '0000');
     $('#profileName').textContent = nameTag;
@@ -161,18 +162,16 @@
         if (!have.has(emoji) && emoji !== '⭐') return;
         if (selected === emoji) return;
         const { error } = await supa.from('profiles').update({ selected_emoji: emoji }).eq('user_id', profile.user_id);
-        if (!error) {
-          profile.selected_emoji = emoji;
-          applyHeaderUI();
-          buildEmojiGrid();
-        }
+        if (!error) { profile.selected_emoji = emoji; applyHeaderUI(); buildEmojiGrid(); }
       };
     });
   }
 
+  // ========= Emoji Shop (부족 골드 방지) =========
   function buildEmojiShop() {
     const grid = $('#emojiShopGrid'); if (!grid) return;
     const have = new Set(profile.unlocked_emojis || ['⭐']);
+
     grid.innerHTML = EMOJI_STORE.map(e => {
       const owned = have.has(e.emoji) || e.price === 0;
       return `
@@ -203,14 +202,14 @@
         const owned = (profile.unlocked_emojis || []).includes(item.emoji) || item.price === 0;
         if (owned) return;
 
-        // 2) (선택) 최신 잔액 동기화 — 필요 없다면 이 블록은 지워도 됨
+        // 2) 최신 잔액 동기화(선택)
         try {
           const { data: total0 } = await supa.rpc('wallet_add_gold', { delta: 0 });
-          if (typeof total0 === 'number') profile.gold = total0 | 0;
+          if (typeof total0 === 'number') profile.gold = total0;
         } catch (_) {}
 
         // 3) 로컬 선확인
-        if ((profile.gold | 0) < (item.price | 0)) {
+        if ((profile.gold|0) < (item.price|0)) {
           toast('골드가 부족합니다!');
           return;
         }
@@ -219,23 +218,18 @@
         const { data: newTotal, error: spendErr } =
           await supa.rpc('wallet_spend_gold', { cost: item.price });
 
-        if (spendErr) {
-          if (/insufficient_gold/i.test(spendErr.message)) {
+        // 5) 실패 처리/응답 검증
+        if (spendErr || typeof newTotal !== 'number' || !Number.isFinite(newTotal) || newTotal < 0) {
+          if (spendErr && /insufficient_gold/i.test(spendErr.message)) {
             toast('골드가 부족합니다!');
           } else {
-            toast('구매 실패: ' + spendErr.message);
+            toast('구매 실패' + (spendErr ? `: ${spendErr.message}` : ''));
           }
           return;
         }
 
-        // 5) 응답 검증
-        if (typeof newTotal !== 'number') {
-          toast('구매 실패: 응답 오류');
-          return;
-        }
-        profile.gold = (newTotal | 0);
-
-        // 6) 보유 목록 업데이트
+        // 6) 여기까지 왔으면 서버 차감 성공
+        profile.gold = newTotal; // 비트 캐스팅(|0) 쓰지 말 것
         const next = Array.from(new Set([...(profile.unlocked_emojis || ['⭐']), item.emoji]));
         const { error } = await supa.from('profiles')
           .update({ unlocked_emojis: next })
@@ -250,11 +244,6 @@
         toast(`구매 완료: ${item.emoji} ${item.name}`);
       };
     });
-  }
-
-  function toast(msg) {
-    const t = $('#saveToast');
-    if (t) { t.textContent = msg; setTimeout(()=> t.textContent='', 1800); }
   }
 
   // ========= Ranking =========
@@ -274,7 +263,6 @@
 
   // ========= GameInterop =========
   window.GameInterop = {
-    // 점수 저장(이모지 포함)
     async saveScore(score, emoji) {
       try {
         const u = user || (await getSession())?.user;
@@ -296,7 +284,7 @@
         return { ok:false, reason: e?.message || 'exception' };
       }
     },
-    onBossClear: (count) => { /* 확장용 */ }
+    onBossClear: (count) => {}
   };
 
   // ========= events =========
@@ -314,10 +302,7 @@
     $('#emojiShopModal').showModal();
   });
 
-  $('#btnGacha')?.addEventListener('click', ()=>{
-    $('#gachaModal').showModal();
-  });
-
+  $('#btnGacha')?.addEventListener('click', ()=>{ $('#gachaModal').showModal(); });
   $('#btnRanking')?.addEventListener('click', openRanking);
 
   // modal close buttons
@@ -329,10 +314,10 @@
     });
   });
 
-  // Start → 게임화면 진입: 헤더/메인 숨김, 게임랩 표시
+  // Start → 게임화면 진입
   $('#btnStart')?.addEventListener('click', ()=>{
     hide($('#mainMenu'));
-    hide($('#topBar'));           // 메인 헤더 감춤(상점/랭킹/뽑기 버튼 감추기)
+    hide($('#topBar'));
     show($('#gameWrap'));
     window.startGame && window.startGame();
   });
@@ -340,17 +325,13 @@
   // ========= boot =========
   (async function boot(){
     session = await getSession();
-    if (!session) {
-      location.href = './login.html';
-      return;
-    }
+    if (!session) { location.href = './login.html'; return; }
     user = session.user;
     await ensureProfile(user);
     await loadProfile(user);
     await fetchBestScore(user.id);
     applyHeaderUI();
 
-    // 게임 코드에서 현재 선택 스킨을 참조할 수 있게
     window.GameConfig = {
       get selectedSkin(){ return profile?.selected_skin || 'white'; }
     };
@@ -359,5 +340,4 @@
     show($('#mainMenu'));
     show($('#topBar'));
   })();
-
 })();

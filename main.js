@@ -192,29 +192,46 @@
         const id = btn.getAttribute('data-buy');
         const item = EMOJI_STORE.find(x=>x.id===id);
         if (!item) return;
-
+    
         // 이미 보유면 무시
-        const owned = (profile.unlocked_emojis||[]).includes(item.emoji) || item.price===0;
+        const owned = (profile.unlocked_emojis||[]).includes(item.emoji) || item.price === 0;
         if (owned) return;
-        
-        // 구매 시 골드 확인
-        if (profile.gold < item.price) {
+    
+        // --- 최신 잔액 동기화 (선택) ---
+        try {
+          const { data: total0 } = await supa.rpc('wallet_add_gold', { delta: 0 });
+          if (typeof total0 === 'number') profile.gold = total0|0;
+        } catch (_) {}
+    
+        // --- 로컬 잔액 체크(숫자화해서 비교) ---
+        if ( (profile.gold|0) < (item.price|0) ) {
           toast('골드가 부족합니다!');
           return;
         }
+    
+        // --- 서버에서 원자적으로 차감 ---
+        const { data: newTotal, error: spendErr } =
+          await supa.rpc('wallet_spend_gold', { cost: item.price });
+    
+        if (spendErr) {            // 서버가 최종 보증 — 부족/경쟁상황도 여기서 막힘
+          if (/insufficient_gold/i.test(spendErr.message)) {
+            toast('골드가 부족합니다!');
+          } else {
+            toast('구매 실패: ' + spendErr.message);
+          }
+          return;
+        }
 
-        // 서버 골드 차감
-        const { data: newTotal, error: rpcErr } = await supa.rpc('wallet_add_gold', { delta: -item.price });
-        if (rpcErr) { toast('골드 차감 실패'); return; }
         profile.gold = (newTotal|0);
-
+    
         // 보유 목록 업데이트
         const next = Array.from(new Set([...(profile.unlocked_emojis||['⭐']), item.emoji]));
-        const { error } = await supa.from('profiles').update({ unlocked_emojis: next }).eq('user_id', profile.user_id);
+        const { error } = await supa.from('profiles')
+          .update({ unlocked_emojis: next })
+          .eq('user_id', profile.user_id);
         if (error) { toast('저장 실패'); return; }
         profile.unlocked_emojis = next;
-
-        // UI 갱신
+    
         applyHeaderUI();
         buildEmojiShop();
         buildEmojiGrid();

@@ -1,43 +1,36 @@
-// game.js — BulletHell Mobile (스킨 완전 지원 + 골드 헤더 동기화)
+// game.js — BulletHell Mobile (레이저 + 랭킹 저장 시 이모지 포함)
 // - Score: 50/sec
 // - Boss: every 3,000 score (≈1 min), stays 20s
-// - Bullets: smaller (normal 3.5 / boss 2.8), boss bullets TTL 6s
 // - Heal: missing 10% + 7
-// - Growth: +10 MaxHP every 30s
-// - Gold: +10G at 20s after start, then every 1 min
+// - Growth: +10 MaxHP every 30s (growthAmount=5)
+// - Gold: +10G at 1m20s, then every 1 min
 // - Supabase RPC: wallet_add_gold(delta)
 
 const W = 350, H = 350;
 const CFG = {
-  // HP & heal
   growthMs: 30000,
   growthAmount: 5,
   healMissingPct: 0.10,
   healPackFlat: 7,
   healPackSpawnMs: 9000,
 
-  // Bullet speed
   bulletSpeedBase: 20.0,
   bulletSpeedScale: 1 / 3000,
   normalSpeedMult: 5,
 
-  // Boss difficulty (easy)
   bossSpeedMult: 30,
   bossBaseDmg: 10,
   bossDmgStep: 2,
   bossDmgEveryMs: 6000,
 
-  // Field spawn easing
   minMs: 200,
   freezeAfter: 18000,
 
-  // Score & gold
   scorePerSec: 50,
-  goldFirstMs: 80000,    // first payout at 1m 20s
-  goldIntervalMs: 60000, // 1 min
+  goldFirstMs: 80000,
+  goldIntervalMs: 60000,
   goldPerPayout: 10,
 
-  // Supabase
   SUPABASE_URL: "https://pecoerlqanocydrdovbb.supabase.co",
   SUPABASE_ANON: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs"
 };
@@ -55,21 +48,12 @@ function ensureSupa() {
 }
 const sleep = (ms)=>new Promise(r=>setTimeout(r, ms));
 
-/** 리다이렉트 루프 방지: supabase/세션 대기 후 없으면 login으로 */
 async function requireLoginOrRedirect(opts = {}) {
   const { retries = 8, delayMs = 120 } = opts;
-
   if (!ensureSupa()) {
-    for (let i=0;i<retries;i++){
-      await sleep(delayMs);
-      if (ensureSupa()) break;
-    }
-    if (!ensureSupa()) {
-      console.error('Supabase not ready; skip redirect to avoid loop');
-      return true;
-    }
+    for (let i=0;i<retries;i++){ await sleep(delayMs); if (ensureSupa()) break; }
+    if (!ensureSupa()) { console.error('Supabase not ready'); return true; }
   }
-
   for (let i=0;i<retries;i++){
     const { data: { session } } = await supa.auth.getSession();
     if (session) return true;
@@ -78,7 +62,6 @@ async function requireLoginOrRedirect(opts = {}) {
   location.href = './login.html';
   return false;
 }
-
 async function serverAddGold(n) {
   const ok = await requireLoginOrRedirect(); if (!ok) return { ok:false, reason:'not_logged_in' };
   const { data, error } = await supa.rpc('wallet_add_gold', { delta: n });
@@ -183,7 +166,116 @@ class Heal {
   expired(){ return false; }
 }
 
-//////////////////// Boss Patterns ////////////////////
+//////////////////// LASER MODULE ////////////////////
+const LASER = {
+  telegraphMs: 500,
+  beamMs: 1200,
+  widthWarn: 3,
+  widthBeam: 10,
+  dps: 45,
+  flashWarn: true
+};
+let telegraphs = [];   // {angle, t0, telegraphMs, beamMs}
+let lasers = [];       // {angle, t0, durMs}
+
+function rayToEdgeFromCenter(angle) {
+  const cx = W / 2, cy = H / 2;
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+  const EPS = 1e-6;
+  const candidates = [];
+
+  if (Math.abs(dx) > EPS) {
+    const tL = (0 - cx) / dx, yL = cy + dy * tL;
+    const tR = (W - cx) / dx, yR = cy + dy * tR;
+    if (yL >= 0 && yL <= H) candidates.push({ t: tL, x: 0, y: yL });
+    if (yR >= 0 && yR <= H) candidates.push({ t: tR, x: W, y: yR });
+  }
+  if (Math.abs(dy) > EPS) {
+    const tT = (0 - cy) / dy, xT = cx + dx * tT;
+    const tB = (H - cy) / dy, xB = cx + dx * tB;
+    if (xT >= 0 && xT <= W) candidates.push({ t: tT, x: xT, y: 0 });
+    if (xB >= 0 && xB <= W) candidates.push({ t: tB, x: xB, y: H });
+  }
+
+  if (candidates.length === 0) return { x1: cx, y1: cy, x2: cx + dx * 1e6, y2: cy + dy * 1e6 };
+  candidates.sort((a, b) => Math.abs(b.t) - Math.abs(a.t));
+  const hit = candidates[0];
+  return { x1: cx, y1: cy, x2: hit.x, y2: hit.y };
+}
+function pointSegDist(px, py, x1, y1, x2, y2) {
+  const vx = x2 - x1, vy = y2 - y1;
+  const wx = px - x1, wy = py - y1;
+  const L2 = vx*vx + vy*vy;
+  if (L2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = (wx*vx + wy*vy) / L2;
+  t = Math.max(0, Math.min(1, t));
+  const projx = x1 + t*vx, projy = y1 + t*vy;
+  return Math.hypot(px - projx, py - projy);
+}
+
+function spawnLaser(angleRad, opts = {}) {
+  const now = performance.now();
+  const telegraphMs = opts.telegraphMs ?? LASER.telegraphMs;
+  const beamMs = opts.beamMs ?? LASER.beamMs;
+  telegraphs.push({ angle: angleRad, t0: now, telegraphMs, beamMs });
+}
+function spawnRotatingSequence(startDeg = 0, count = 8, stepDeg = 45, intervalMs = 400, opts = {}) {
+  for (let i = 0; i < count; i++) {
+    const a = (startDeg + i * stepDeg) * Math.PI / 180;
+    setTimeout(() => spawnLaser(a, opts), i * intervalMs);
+  }
+}
+function updateLasers(dtMs, player) {
+  const now = performance.now();
+  for (let i = telegraphs.length - 1; i >= 0; i--) {
+    const t = telegraphs[i];
+    const elapsed = now - t.t0;
+    if (elapsed >= t.telegraphMs) {
+      lasers.push({ angle: t.angle, t0: now, durMs: t.beamMs });
+      telegraphs.splice(i, 1);
+    }
+  }
+  for (let i = lasers.length - 1; i >= 0; i--) {
+    const L = lasers[i];
+    const alive = now - L.t0;
+    if (alive >= L.durMs) { lasers.splice(i, 1); continue; }
+    if (player && !player.invincible) {
+      const seg = rayToEdgeFromCenter(L.angle);
+      const dist = pointSegDist(player.x, player.y, seg.x1, seg.y1, seg.x2, seg.y2);
+      const hit = dist <= (player.r) + (LASER.widthBeam / 2);
+      if (hit) {
+        const damage = (LASER.dps * dtMs) / 1000;
+        player.hp = Math.max(0, player.hp - damage);
+      }
+    }
+  }
+}
+function drawLasers(ctx) {
+  for (const t of telegraphs) {
+    const seg = rayToEdgeFromCenter(t.angle);
+    const blink = LASER.flashWarn ? (Math.sin(performance.now() / 80) * 0.5 + 0.5) : 1;
+    ctx.save();
+    ctx.globalAlpha = 0.5 * blink;
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = t.widthWarn ?? LASER.widthWarn;
+    ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke();
+    ctx.restore();
+  }
+  for (const L of lasers) {
+    const seg = rayToEdgeFromCenter(L.angle);
+    const life = (performance.now() - L.t0) / L.durMs;
+    const alpha = 0.85 * (1 - Math.min(1, Math.max(0, life - 0.7) / 0.3));
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.35, alpha);
+    ctx.strokeStyle = '#ff1744';
+    ctx.lineWidth = LASER.widthBeam;
+    ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke();
+    ctx.restore();
+  }
+}
+function clearLasers(){ telegraphs.length=0; lasers.length=0; }
+
+//////////////////// Boss ////////////////////
 function bossDmg() {
   const step = Math.floor(state.boss.t / CFG.bossDmgEveryMs);
   return CFG.bossBaseDmg + step * CFG.bossDmgStep;
@@ -207,50 +299,28 @@ function bossSpiral(cx, cy, step, count, speed, clr){
   }
 }
 
-//////////////////// Skin Painter (강화된 GOD Rainbow) ////////////////////
+//////////////////// Skin Painter ////////////////////
 let cachedSkinId = null, painter = makePainter('white');
-
 function makeStripePattern(ctx, colors, angleDeg = 45, stripe = 8) {
-  const off = document.createElement('canvas');
-  off.width = off.height = stripe * 2;
+  const off = document.createElement('canvas'); off.width = off.height = stripe * 2;
   const octx = off.getContext('2d');
-  octx.save();
-  octx.translate(off.width/2, off.height/2);
-  octx.rotate(angleDeg * Math.PI/180);
-  octx.translate(-off.width/2, -off.height/2);
+  octx.save(); octx.translate(off.width/2, off.height/2);
+  octx.rotate(angleDeg * Math.PI/180); octx.translate(-off.width/2, -off.height/2);
   octx.fillStyle = colors[0]; octx.fillRect(0, 0, off.width, off.height);
   octx.fillStyle = colors[1]; octx.fillRect(0, 0, off.width, stripe);
-  octx.restore();
-  return ctx.createPattern(off, 'repeat');
+  octx.restore(); return ctx.createPattern(off, 'repeat');
 }
 function makeGradient(ctx, type, stops) {
-  let g = (type === 'h') ? ctx.createLinearGradient(-20, 0, 20, 0)
-                         : ctx.createLinearGradient(0, -20, 0, 20);
-  for (const [pos, color] of stops) g.addColorStop(pos, color);
-  return g;
+  let g = (type === 'h') ? ctx.createLinearGradient(-20, 0, 20, 0) : ctx.createLinearGradient(0, -20, 0, 20);
+  for (const [pos, color] of stops) g.addColorStop(pos, color); return g;
 }
-
 function makePainter(id){
   return function(){
     const r = state.player.r;
-    ctx.save();
-    ctx.translate(state.player.x, state.player.y);
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI*2);
-
-    // 기본 단색 팔레트
-    const solid = {
-      white:'#ffffff', mint:'#7ef5d1', sky:'#7ecbff', lime:'#a6ff6b',
-      orange:'#ffb36b', violet:'#ba8bff', aqua:'#6bfffb'
-    };
-
-    if (solid[id]) {
-      ctx.fillStyle = solid[id];
-      ctx.fill();
-      ctx.restore();
-      return;
-    }
-
+    ctx.save(); ctx.translate(state.player.x, state.player.y);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2);
+    const solid = { white:'#ffffff', mint:'#7ef5d1', sky:'#7ecbff', lime:'#a6ff6b', orange:'#ffb36b', violet:'#ba8bff', aqua:'#6bfffb' };
+    if (solid[id]) { ctx.fillStyle = solid[id]; ctx.fill(); ctx.restore(); return; }
     switch(id){
       case 'stripe-mint-sky':
         ctx.fillStyle = makeStripePattern(ctx, ['#7ef5d1','#7ecbff'], 45, 8); break;
@@ -259,76 +329,39 @@ function makePainter(id){
       case 'stripe-gold-silver':
         ctx.fillStyle = makeStripePattern(ctx, ['#ffd700','#c0c0c0'], 45, 8); break;
       case 'grad-sunrise':
-        ctx.fillStyle = makeGradient(ctx, 'h', [
-          [0.00,'#ff9a9e'], [0.50,'#fad0c4'], [1.00,'#ffd1ff']
-        ]); break;
+        ctx.fillStyle = makeGradient(ctx, 'h', [[0,'#ff9a9e'],[0.5,'#fad0c4'],[1,'#ffd1ff']]); break;
       case 'grad-sea':
-        ctx.fillStyle = makeGradient(ctx, 'h', [
-          [0.00,'#36d1dc'], [1.00,'#5b86e5']
-        ]); break;
+        ctx.fillStyle = makeGradient(ctx, 'h', [[0,'#36d1dc'],[1,'#5b86e5']]); break;
       case 'grad-sunset':
-        ctx.fillStyle = makeGradient(ctx, 'h', [
-          [0.00,'#0b486b'], [1.00,'#f56217']
-        ]); break;
-
-      // ★ 업그레이드된 GOD Rainbow
+        ctx.fillStyle = makeGradient(ctx, 'h', [[0,'#0b486b'],[1,'#f56217']]); break;
       case 'god-rainbow': {
-        // 시간에 따라 회전하는 무지개(애니메이션)
-        const t = performance.now() * 0.12 / 1000; // 회전 속도
+        const t = performance.now() * 0.12 / 1000;
         const phase = (t * 360) % 360;
-        const stops = [];
-        // 7색 그라데이션을 균등 분할 + phase로 회전
-        const hues = [0, 45, 90, 135, 180, 240, 300, 360].map(h => (h + phase) % 360);
-        for (let i=0; i<hues.length; i++){
-          stops.push([i/(hues.length-1), `hsl(${hues[i]} 100% 60%)`]);
-        }
+        const hues = [0,45,90,135,180,240,300,360].map(h => (h + phase) % 360);
+        const stops = hues.map((h,i)=>[i/(hues.length-1), `hsl(${h} 100% 60%)`]);
         ctx.fillStyle = makeGradient(ctx, 'h', stops);
-
-        // 내부 채움 + 강한 광채
-        ctx.shadowColor = 'rgba(255,255,255,0.85)';
-        ctx.shadowBlur = 18;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        // 라이트닝 링(외곽선) + 가벼운 오라
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = `hsla(${(phase+180)%360} 100% 70% / 0.9)`;
-        ctx.stroke();
-
-        ctx.globalAlpha = 0.18;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(0,0,r+2,0,Math.PI*2); ctx.stroke();
-        ctx.globalAlpha = 0.10;
-        ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke();
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.restore();
-        return;
+        ctx.shadowColor = 'rgba(255,255,255,0.85)'; ctx.shadowBlur = 18; ctx.fill(); ctx.shadowBlur = 0;
+        ctx.globalCompositeOperation = 'lighter'; ctx.lineWidth = 3;
+        ctx.strokeStyle = `hsla(${(phase+180)%360} 100% 70% / 0.9)`; ctx.stroke();
+        ctx.globalAlpha = 0.18; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0,0,r+2,0,Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 0.10; ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+        ctx.restore(); return;
       }
-
-      default:
-        ctx.fillStyle = '#ffffff';
+      default: ctx.fillStyle = '#ffffff';
     }
-    ctx.fill();
-    ctx.restore();
+    ctx.fill(); ctx.restore();
   };
 }
-
 
 //////////////////// Gold Utils ////////////////////
 async function grantGold(amount){
   const res = await serverAddGold(amount).catch(()=>null);
-  if (res && res.ok && typeof res.total === 'number') {
-    state.gold = res.total|0;
-  }
+  if (res && res.ok && typeof res.total === 'number') { state.gold = res.total|0; }
   updateHUD();
   const t = document.getElementById('saveToast');
   if (t){ t.textContent = `+${amount} Gold`; setTimeout(()=>t.textContent='', 1500); }
-
-  // ★ 헤더 Gold 즉시 반영
-  const g = document.getElementById('goldText');
-  if (g) g.textContent = state.gold;
+  const g = document.getElementById('goldText'); if (g) g.textContent = state.gold;
 }
 
 //////////////////// Game State ////////////////////
@@ -354,6 +387,7 @@ function reset(){
   state.growthT=0; state.items.length=0; state.itemT=0;
   state.nextGoldTime = CFG.goldFirstMs;
   state.goldInterval = CFG.goldIntervalMs;
+  clearLasers();
   updateHUD();
 }
 function gameOver(){
@@ -372,6 +406,7 @@ function tryStartBoss(){
 }
 function endBossPhase(){
   state.boss.active=false;
+  clearLasers();
   if (window.GameInterop && typeof window.GameInterop.onBossClear === 'function'){
     try { window.GameInterop.onBossClear(state.boss.count); } catch(_) {}
   }
@@ -391,6 +426,10 @@ function updateBoss(dt){
       if (!phase2) bossSpiral(W/2,H/2,0.32,8,1.7,'#c084fc');
       else         bossSpiral(W/2,H/2,0.44,10,1.9,'#f472b6');
     }
+    const startDeg = (state.boss.toggle*23 + (phase2?15:0)) % 360;
+    spawnRotatingSequence(startDeg, 8, 45, phase2 ? 320 : 400, {
+      telegraphMs: LASER.telegraphMs, beamMs: LASER.beamMs
+    });
   }
   if (t >= 20000) endBossPhase();
 }
@@ -398,28 +437,23 @@ function updateBoss(dt){
 function update(dt){
   if (!state.run) return;
 
-  // time
   state.time += dt*1000;
 
-  // move
   const a = inputAxis();
   state.player.x += a.x*state.player.speed*dt;
   state.player.y += a.y*state.player.speed*dt;
   state.player.x = Math.max(state.player.r, Math.min(W - state.player.r, state.player.x));
   state.player.y = Math.max(state.player.r, Math.min(H - state.player.r, state.player.y));
 
-  // growth
   state.growthT += dt*1000;
   if (state.growthT >= CFG.growthMs){ state.growthT -= CFG.growthMs; state.maxHP += CFG.growthAmount; updateHUD(); }
 
-  // heal packs
   state.itemT += dt*1000;
   if (state.itemT >= CFG.healPackSpawnMs){
     state.itemT -= CFG.healPackSpawnMs;
     state.items.push(new Heal(10+Math.random()*(W-20), 10+Math.random()*(H-20)));
   }
 
-  // boss / field
   tryStartBoss();
   if (state.boss.active){
     updateBoss(dt);
@@ -436,7 +470,6 @@ function update(dt){
     }
   }
 
-  // bullets
   for (const b of state.bullets) b.step(dt);
   state.bullets = state.bullets.filter(b => b.in());
   for (const b of state.bullets){
@@ -447,7 +480,6 @@ function update(dt){
     }
   }
 
-  // heals
   for (const it of state.items){
     if (Math.hypot(it.x-state.player.x, it.y-state.player.y) < it.r + state.player.r){
       const missing = state.maxHP - state.player.hp;
@@ -457,12 +489,13 @@ function update(dt){
   }
   state.items = state.items.filter(it => !it.picked && !it.expired());
 
-  // score & timed gold
   state.score += CFG.scorePerSec * dt;
   while (state.time >= state.nextGoldTime){
-    grantGold(CFG.goldPerPayout);      // async
+    grantGold(CFG.goldPerPayout);
     state.nextGoldTime += state.goldInterval;
   }
+
+  updateLasers(dt*1000, state.player);
 
   updateHUD();
   if (state.player.hp <= 0) gameOver();
@@ -471,17 +504,14 @@ function update(dt){
 //////////////////// Draw ////////////////////
 function draw(){
   ctx.clearRect(0,0,W,H);
-  // border
   ctx.fillStyle='#fff';
   ctx.fillRect(0,0,W,4); ctx.fillRect(0,0,4,H);
   ctx.fillRect(W-4,0,4,H); ctx.fillRect(0,H-4,W,4);
 
-  // player (스킨 적용)
   const skinId = (window.GameConfig && window.GameConfig.selectedSkin) ? window.GameConfig.selectedSkin : 'white';
   if (skinId !== cachedSkinId){ painter = makePainter(skinId); cachedSkinId = skinId; }
   painter();
 
-  // bullets & heals
   for (const b of state.bullets){ ctx.fillStyle=b.clr; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
   for (const it of state.items){
     ctx.fillStyle='#ff6ec7';
@@ -493,6 +523,8 @@ function draw(){
     ctx.lineTo(it.x+7,it.y-1);
     ctx.closePath(); ctx.fill();
   }
+
+  drawLasers(ctx);
 }
 
 //////////////////// Loop & Buttons ////////////////////
@@ -522,19 +554,39 @@ async function startGame(){
 }
 window.startGame = startGame;
 
-document.getElementById('btnToMenu')?.addEventListener('click', () => {
+// 메인으로 복귀 버튼(두 군데에서 받아줌)
+function backToMain(){
   document.getElementById('gameWrap')?.classList.add('hidden');
   document.getElementById('mainMenu')?.classList.remove('hidden');
   document.getElementById('over')?.classList.add('hidden');
-});
+  document.getElementById('topBar')?.classList.remove('hidden'); // ★ 헤더 다시 표시(메인에서만 상점/랭킹/뽑기)
+  state.run = false;
+  cancelAnimationFrame(raf);
+}
+document.getElementById('btnToMenu')?.addEventListener('click', backToMain);
+document.getElementById('btnToMenu2')?.addEventListener('click', backToMain);
+
+// 랭킹 저장(이모지 포함)
 document.getElementById('btnSaveRank')?.addEventListener('click', async () => {
   const ok = await requireLoginOrRedirect(); if (!ok) return;
   const saver = window.GameInterop && window.GameInterop.saveScore;
   if (!saver) return;
-  const res = await saver(state.score);
+
+  // 헤더의 현재 이모지를 읽거나, 없으면 null
+  const emojiEl = document.getElementById('profileEmoji');
+  const emoji = emojiEl ? emojiEl.textContent : null;
+
+  let res;
+  try {
+    if (saver.length >= 2) res = await saver(state.score, emoji);
+    else res = await saver(state.score);
+  } catch (e) {
+    res = { ok:false, reason: e?.message || 'exception' };
+  }
+
   const t = document.getElementById('saveToast');
   if (t) {
-    t.textContent = res.ok ? '랭킹 저장 완료' : '실패: ' + (res.reason || '알 수 없음');
+    t.textContent = res?.ok ? `랭킹 저장 완료 ${emoji || ''}` : '실패: ' + (res?.reason || '알 수 없음');
     setTimeout(() => t.textContent = '', 2500);
   }
 });

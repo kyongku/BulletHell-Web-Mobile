@@ -11,7 +11,7 @@
     .ghost { background:transparent; }
     main { padding: 10px; }
     .card { border:1px solid #1f2a37; background:#0f141b; border-radius:12px; padding:10px; margin:8px 0; display:flex; align-items:center; gap:10px; }
-    .avatar { width:36px; height:36px; border-radius:50%; background:#1a2332; display:grid; place-items:center; }
+    .avatar { width:36px; height:36px; border-radius:50%; background:#1a2332; display:grid; place-items:center; font-size:18px; }
     .name { font-weight:700; }
     .score { margin-left:auto; font-variant-numeric: tabular-nums; }
     .muted { color:#94a3b8; font-size:12px; }
@@ -35,38 +35,44 @@
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs'
     );
 
-    async function loadViaView(){ return await supa.from('top_scores').select('user_id,score'); }
-    async function loadViaClientFallback(){
-      const r = await supa.from('scores').select('user_id,score').order('score', {ascending:false}).limit(500);
+    // rankings 테이블에서 최근 N개를 가져와 유저별 최고 점수만 남긴다.
+    async function loadFromRankings() {
+      // 최대 1000개만 읽어온 뒤 클라이언트에서 유저별 최고점 집계
+      const r = await supa
+        .from('rankings')
+        .select('user_id, nickname, tag, emoji, score')
+        .order('score', { ascending: false })
+        .limit(1000);
+
       if (r.error) return r;
-      const bestMap = new Map();
-      for (const s of r.data){ const cur = bestMap.get(s.user_id); if (!cur || s.score>cur) bestMap.set(s.user_id, s.score); }
-      const rows = Array.from(bestMap.entries()).map(([user_id,score])=>({user_id,score})).sort((a,b)=>b.score-a.score);
+
+      const best = new Map(); // user_id -> {user_id,nickname,tag,emoji,score}
+      for (const row of r.data) {
+        const cur = best.get(row.user_id);
+        if (!cur || row.score > cur.score) best.set(row.user_id, row);
+      }
+      const rows = Array.from(best.values()).sort((a,b)=>b.score-a.score);
       return { data: rows };
     }
 
     async function load(){
       const list = document.getElementById('list');
-      let res = await loadViaView(); if (res.error) res = await loadViaClientFallback();
-      if (res.error){ list.textContent='불러오기 실패: '+res.error.message; return; }
-      const rows = res.data; if (!rows.length){ list.textContent='아직 점수가 없습니다.'; return; }
+      const res = await loadFromRankings();
+      if (res.error){ list.textContent = '불러오기 실패: ' + res.error.message; return; }
+      const rows = res.data || [];
+      if (!rows.length){ list.textContent = '아직 점수가 없습니다.'; return; }
 
-      const ids = rows.map(r=>r.user_id);
-      const profs = await supa.from('profiles').select('user_id,nickname,tag,avatar_url').in('user_id', ids);
-      if (profs.error){ list.textContent='프로필 불러오기 실패: '+profs.error.message; return; }
-      const pm = new Map(profs.data.map(p=>[p.user_id,p]));
-
-      list.innerHTML = rows.map((s,i)=>{
-        const p = pm.get(s.user_id);
-        const nameTag = p ? (p.nickname + '#' + p.tag) : 'Unknown';
-        const avatar = p && p.avatar_url ? `<img src="${p.avatar_url}" class="avatar" alt=""/>` : `<div class="avatar">🙂</div>`;
+      list.innerHTML = rows.map((r, i) => {
+        const nameTag = `${r.nickname ?? 'Unknown'}#${r.tag ?? '0000'}`;
+        const emoji = r.emoji || '⭐';
         return `
           <div class="card">
             <div class="muted" style="width:28px;text-align:right;">${i+1}</div>
-            ${avatar}
+            <div class="avatar">${emoji}</div>
             <div class="name">${nameTag}</div>
-            <div class="score">${s.score}</div>
-          </div>`;
+            <div class="score">${r.score}</div>
+          </div>
+        `;
       }).join('');
     }
     load();

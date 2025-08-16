@@ -211,7 +211,7 @@
         // 2) 로컬 선확인
         if ((profile.gold|0) < (item.price|0)) {
           toast('골드가 부족합니다!');
-          btn.disabled = false;
+          // btn.disabled = false;
           return;
         }
 

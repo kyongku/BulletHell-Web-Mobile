@@ -168,40 +168,53 @@ class Heal {
 
 //////////////////// LASER MODULE ////////////////////
 const LASER = {
-  telegraphMs: 500,
-  beamMs: 1200,
-  widthWarn: 3,
-  widthBeam: 10,
+  telegraphMs: 700,
+  beamMs: 300,
+  widthWarn: 10,
+  widthBeam: 7,
   dps: 45,
   flashWarn: true
 };
+
 let telegraphs = [];   // {angle, t0, telegraphMs, beamMs}
 let lasers = [];       // {angle, t0, durMs}
 
+// 수정: '앞방향(양의 t) 중 최단 교점' 선택으로 θ와 θ+π 겹침 방지
 function rayToEdgeFromCenter(angle) {
   const cx = W / 2, cy = H / 2;
   const dx = Math.cos(angle), dy = Math.sin(angle);
   const EPS = 1e-6;
-  const candidates = [];
+  const cand = [];
 
   if (Math.abs(dx) > EPS) {
     const tL = (0 - cx) / dx, yL = cy + dy * tL;
     const tR = (W - cx) / dx, yR = cy + dy * tR;
-    if (yL >= 0 && yL <= H) candidates.push({ t: tL, x: 0, y: yL });
-    if (yR >= 0 && yR <= H) candidates.push({ t: tR, x: W, y: yR });
+    if (yL >= 0 && yL <= H) cand.push({ t: tL, x: 0, y: yL });
+    if (yR >= 0 && yR <= H) cand.push({ t: tR, x: W, y: yR });
   }
   if (Math.abs(dy) > EPS) {
     const tT = (0 - cy) / dy, xT = cx + dx * tT;
     const tB = (H - cy) / dy, xB = cx + dx * tB;
-    if (xT >= 0 && xT <= W) candidates.push({ t: tT, x: xT, y: 0 });
-    if (xB >= 0 && xB <= W) candidates.push({ t: tB, x: xB, y: H });
+    if (xT >= 0 && xT <= W) cand.push({ t: tT, x: xT, y: 0 });
+    if (xB >= 0 && xB <= W) cand.push({ t: tB, x: xB, y: H });
   }
 
-  if (candidates.length === 0) return { x1: cx, y1: cy, x2: cx + dx * 1e6, y2: cy + dy * 1e6 };
-  candidates.sort((a, b) => Math.abs(b.t) - Math.abs(a.t));
-  const hit = candidates[0];
+  if (cand.length === 0) {
+    return { x1: cx, y1: cy, x2: cx + dx * 1e6, y2: cy + dy * 1e6 };
+  }
+
+  // 앞방향(양의 t) 중 최단 교점 선택
+  const forward = cand.filter(c => c.t >= 0);
+  let hit;
+  if (forward.length > 0) {
+    hit = forward.reduce((a, b) => (a.t < b.t ? a : b));
+  } else {
+    // 전부 음수면 |t| 최소(가장 가까운 뒤쪽)로 대체
+    hit = cand.reduce((a, b) => (Math.abs(a.t) < Math.abs(b.t) ? a : b));
+  }
   return { x1: cx, y1: cy, x2: hit.x, y2: hit.y };
 }
+
 function pointSegDist(px, py, x1, y1, x2, y2) {
   const vx = x2 - x1, vy = y2 - y1;
   const wx = px - x1, wy = py - y1;
@@ -219,14 +232,27 @@ function spawnLaser(angleRad, opts = {}) {
   const beamMs = opts.beamMs ?? LASER.beamMs;
   telegraphs.push({ angle: angleRad, t0: now, telegraphMs, beamMs });
 }
+
+// 수정: 기본값을 45도 × 8발, 0.4초 간격으로
 function spawnRotatingSequence(startDeg = 0, count = 8, stepDeg = 45, intervalMs = 400, opts = {}) {
   for (let i = 0; i < count; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     setTimeout(() => spawnLaser(a, opts), i * intervalMs);
   }
 }
+
+// 선택: 동시에 8발 즉시 일제사격
+function spawnBurst8(startDeg = 0, stepDeg = 45, opts = {}) {
+  for (let i = 0; i < 8; i++) {
+    const a = (startDeg + i * stepDeg) * Math.PI / 180;
+    spawnLaser(a, opts);
+  }
+}
+
 function updateLasers(dtMs, player) {
   const now = performance.now();
+
+  // telegraph -> beam 전환
   for (let i = telegraphs.length - 1; i >= 0; i--) {
     const t = telegraphs[i];
     const elapsed = now - t.t0;
@@ -235,10 +261,13 @@ function updateLasers(dtMs, player) {
       telegraphs.splice(i, 1);
     }
   }
+
+  // beam 유지/충돌/소멸
   for (let i = lasers.length - 1; i >= 0; i--) {
     const L = lasers[i];
     const alive = now - L.t0;
     if (alive >= L.durMs) { lasers.splice(i, 1); continue; }
+
     if (player && !player.invincible) {
       const seg = rayToEdgeFromCenter(L.angle);
       const dist = pointSegDist(player.x, player.y, seg.x1, seg.y1, seg.x2, seg.y2);
@@ -250,7 +279,9 @@ function updateLasers(dtMs, player) {
     }
   }
 }
+
 function drawLasers(ctx) {
+  // 경고선
   for (const t of telegraphs) {
     const seg = rayToEdgeFromCenter(t.angle);
     const blink = LASER.flashWarn ? (Math.sin(performance.now() / 80) * 0.5 + 0.5) : 1;
@@ -261,6 +292,8 @@ function drawLasers(ctx) {
     ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke();
     ctx.restore();
   }
+
+  // 실제 레이저
   for (const L of lasers) {
     const seg = rayToEdgeFromCenter(L.angle);
     const life = (performance.now() - L.t0) / L.durMs;
@@ -273,7 +306,9 @@ function drawLasers(ctx) {
     ctx.restore();
   }
 }
-function clearLasers(){ telegraphs.length=0; lasers.length=0; }
+
+function clearLasers(){ telegraphs.length = 0; lasers.length = 0; }
+
 
 //////////////////// Boss ////////////////////
 function bossDmg() {

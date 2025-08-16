@@ -23,7 +23,8 @@
 
   <header id="topBar" class="hidden">
     <button id="profileBtn" class="profile" title="프로필">
-      <div class="avatar">🙂</div>
+      <!-- ▶ 변경: 헤더 아바타에 id 부여(선택 이모지 동기화 대상) -->
+      <div class="avatar" id="profileEmoji">⭐</div>
       <div class="who">
         <div id="profileName">로그인 필요</div>
         <div class="best">Best: <span id="profileBest">0</span></div>
@@ -34,6 +35,8 @@
     <button id="btnGacha" class="primary">뽑기(100G)</button>
     <button id="btnPatch" class="ghost">패치노트</button>
     <button id="btnRanking" class="ghost">랭킹</button>
+    <!-- ▶ 추가: 이모지 상점 버튼(메인에서만 노출) -->
+    <button id="btnEmojiShop" class="ghost">이모지 상점</button>
   </header>
 
   <main id="mainMenu" class="hidden">
@@ -86,14 +89,20 @@
     </div>
   </div>
 
-  <!-- 프로필/스킨 선택 -->
+  <!-- 프로필/스킨 + ▶ 추가: 이모지 선택 -->
   <div id="profileModal" class="overlay hidden" role="dialog" aria-modal="true">
     <div class="card">
       <h3 style="margin:0 0 8px 0;">프로필</h3>
       <div class="muted" id="profInfo">닉네임 / 최고점 / Gold</div>
+
       <h4 style="margin:10px 0 6px 0;">스킨 선택</h4>
       <div id="skinGrid" class="skin-grid"></div>
-      <!-- 하단: 닫기(왼쪽) / 로그아웃(오른쪽) -->
+
+      <!-- ▶ 추가: 이모지 선택 섹션 -->
+      <h4 style="margin:10px 0 6px 0;">이모지 선택</h4>
+      <div id="emojiGrid" class="skin-grid"></div>
+      <p class="muted">이모지는 상점/뽑기로 해금 후 선택할 수 있어요.</p>
+
       <div class="row actions" style="margin-top:10px;">
         <button id="btnProfileClose" class="ghost">닫기</button>
         <button id="btnLogout" class="secondary">로그아웃</button>
@@ -121,6 +130,18 @@
       <div id="patchList" class="patchlist"></div>
       <div class="row actions">
         <button id="btnPatchClose" class="ghost">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▶ 추가: 이모지 상점(메인 전용) -->
+  <div id="emojiShopModal" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">이모지 상점</h3>
+      <div id="emojiShopGrid" class="emoji-shop"></div>
+      <div class="row actions" style="margin-top:10px;">
+        <div class="muted">보유 골드: <span id="shopGold">0</span></div>
+        <button id="btnEmojiShopClose" class="ghost">닫기</button>
       </div>
     </div>
   </div>
@@ -156,11 +177,11 @@
 
       await ensureProfile(user);
       await loadProfile(user);
+
       // RPC에서 현재 총 골드 읽어와서 profiles/헤더에 반영
       try {
         const { data: total, error: terr } = await supa.rpc('wallet_add_gold', { delta: 0 });
         if (!terr && typeof total === 'number') {
-          // DB profiles.gold 업데이트 (표시 일관성)
           await supa.from('profiles').update({ gold: total }).eq('user_id', currentUser.id);
           profile.gold = total;
         }
@@ -169,6 +190,10 @@
       await fetchBestScore(user.id);
       applyHeaderUI();
       buildSkinGrid();
+
+      // ▶ 추가: 이모지 그리드/상점 준비
+      buildEmojiGrid();
+      // window.GameConfig.selectedSkin 유지
       window.GameConfig = { get selectedSkin(){ return profile?.selected_skin || 'white'; } };
 
       // UI 표시
@@ -271,7 +296,8 @@
             const { data:t } = await supa.from('profiles').select('user_id').eq('nickname', name).eq('tag', tag).maybeSingle();
             if (!t) ok = true; else { tag = genTag4(); tries++; }
           }
-          const row = { user_id: user.id, nickname: name, tag, gold: 0, selected_skin: 'white', unlocked_skins: ['white'] };
+          const row = { user_id: user.id, nickname: name, tag, gold: 0, selected_skin: 'white', unlocked_skins: ['white'],
+                        /* ▶ 추가: 이모지 기본값 */ selected_emoji:'⭐', unlocked_emojis:['⭐'] };
           const { error } = await supa.from('profiles').insert([row]);
           if (error){ document.getElementById('nickMsg').textContent = '실패: '+error.message; return; }
           document.getElementById('nickModal').classList.add('hidden');
@@ -286,6 +312,9 @@
       if (profile.gold == null) patch.gold = 0;
       if (!profile.selected_skin) patch.selected_skin = 'white';
       if (!Array.isArray(profile.unlocked_skins)) patch.unlocked_skins = ['white'];
+      // ▶ 추가: 이모지 필드 보정
+      if (!profile.selected_emoji) patch.selected_emoji = '⭐';
+      if (!Array.isArray(profile.unlocked_emojis)) patch.unlocked_emojis = ['⭐'];
       if (Object.keys(patch).length){
         await supa.from('profiles').update(patch).eq('user_id', user.id);
         Object.assign(profile, patch);
@@ -300,6 +329,97 @@
       document.getElementById('profileName').textContent = nameTag;
       document.getElementById('profileBest').textContent = String(bestScore||0);
       document.getElementById('goldText').textContent = profile.gold ?? 0;
+      // ▶ 추가: 헤더 이모지 반영
+      document.getElementById('profileEmoji').textContent = profile.selected_emoji || '⭐';
+    }
+
+    // ---------- ▶ 추가: 이모지 카탈로그 & UI/구매 ----------
+    const EMOJI_STORE = [
+      { id:'e_star',   emoji:'⭐', name:'Star',   price:  0 }, // 기본 무료
+      { id:'e_smile',  emoji:'😄', name:'Smile',  price: 60 },
+      { id:'e_fire',   emoji:'🔥', name:'Fire',   price:120 },
+      { id:'e_crown',  emoji:'👑', name:'Crown',  price:180 },
+      { id:'e_rocket', emoji:'🚀', name:'Rocket', price:200 },
+      { id:'e_skull',  emoji:'💀', name:'Skull',  price:200 },
+      { id:'e_dragon', emoji:'🐉', name:'Dragon', price:260 },
+      { id:'e_trophy', emoji:'🏆', name:'Trophy', price:300 }
+    ];
+
+    function buildEmojiGrid(){
+      const grid = document.getElementById('emojiGrid');
+      if (!grid) return;
+      const have = new Set(profile.unlocked_emojis || ['⭐']);
+      const selected = profile.selected_emoji || '⭐';
+      grid.innerHTML = EMOJI_STORE.map(e=>{
+        const owned = have.has(e.emoji) || e.price===0;
+        const sel = selected === e.emoji;
+        return `
+          <button class="chip ${owned?'':'chip-lock'} ${sel?'chip-sel':''}" data-emoji="${e.emoji}">
+            <span class="chip-color" style="display:grid;place-items:center;font-size:16px;background:#1a2332">${e.emoji}</span>
+            <span>${e.name}</span>
+          </button>`;
+      }).join('');
+      grid.querySelectorAll('[data-emoji]').forEach(btn=>{
+        btn.onclick = async ()=>{
+          const pick = btn.getAttribute('data-emoji');
+          if (!have.has(pick) && pick!=='⭐') return;
+          if (profile.selected_emoji === pick) return;
+          const { error } = await supa.from('profiles').update({ selected_emoji: pick }).eq('user_id', profile.user_id);
+          if (!error){
+            profile.selected_emoji = pick;
+            applyHeaderUI();
+            buildEmojiGrid();
+          }
+        };
+      });
+    }
+
+    function buildEmojiShop(){
+      const grid = document.getElementById('emojiShopGrid');
+      if (!grid) return;
+      const have = new Set(profile.unlocked_emojis || ['⭐']);
+      grid.innerHTML = EMOJI_STORE.map(e=>{
+        const owned = have.has(e.emoji) || e.price===0;
+        return `
+          <div class="item">
+            <div class="icon">${e.emoji}</div>
+            <div class="meta">
+              <div class="nm">${e.name}</div>
+              <div class="pr">💰 ${e.price}</div>
+            </div>
+            <button class="buy" data-buy="${e.id}" ${owned?'disabled':''}>${owned?'보유중':'구매'}</button>
+          </div>`;
+      }).join('');
+      grid.querySelectorAll('[data-buy]').forEach(btn=>{
+        btn.onclick = async ()=>{
+          const id = btn.getAttribute('data-buy');
+          const item = EMOJI_STORE.find(x=>x.id===id); if (!item) return;
+          const owned = (profile.unlocked_emojis||[]).includes(item.emoji) || item.price===0;
+          if (owned) return;
+
+          // 골드 차감
+          const { data: newTotal, error: rpcErr } = await supa.rpc('wallet_add_gold', { delta: -item.price });
+          if (rpcErr) { toast('골드 차감 실패'); return; }
+          profile.gold = (newTotal|0);
+
+          // 보유 이모지 추가
+          const next = Array.from(new Set([...(profile.unlocked_emojis||['⭐']), item.emoji]));
+          const { error } = await supa.from('profiles').update({ unlocked_emojis: next }).eq('user_id', profile.user_id);
+          if (error) { toast('저장 실패'); return; }
+          profile.unlocked_emojis = next;
+
+          // UI 갱신
+          applyHeaderUI();
+          buildEmojiShop();
+          buildEmojiGrid();
+          toast(`구매 완료: ${item.emoji} ${item.name}`);
+        };
+      });
+    }
+
+    function toast(msg){
+      const el = document.getElementById('saveToast');
+      if (el){ el.textContent = msg; setTimeout(()=> el.textContent='', 1800); }
     }
 
     // ---------- 버튼들 ----------
@@ -322,11 +442,14 @@
     document.getElementById('btnStart').onclick = ()=>{
       document.getElementById('mainMenu').classList.add('hidden');
       document.getElementById('gameWrap').classList.remove('hidden');
+      // ▶ 추가: 메인 전용 헤더 숨김(게임 중엔 보이지 않게)
+      document.getElementById('topBar').classList.add('hidden');
       window.startGame && window.startGame();
     };
 
     document.getElementById('profileBtn').onclick = ()=>{
       updateProfileModalUI();
+      buildEmojiGrid(); // 최신 보유/선택 반영
       document.getElementById('profileModal').classList.remove('hidden');
     };
     document.getElementById('btnProfileClose').onclick = ()=> document.getElementById('profileModal').classList.add('hidden');
@@ -356,8 +479,18 @@
       const { error } = await supa.from('profiles').update(updates).eq('user_id', profile.user_id);
       if (error){ document.getElementById('gachaResult').textContent = '오류: '+error.message; return; }
       Object.assign(profile, updates);
-      applyHeaderUI(); buildSkinGrid(); updateProfileModalUI();
+      applyHeaderUI(); buildSkinGrid(); updateProfileModalUI(); buildEmojiGrid();
       document.getElementById('gachaResult').textContent = `당첨! [${grade}] ${skin.name}`;
+    };
+
+    // ▶ 추가: 이모지 상점 열기/닫기
+    document.getElementById('btnEmojiShop').onclick = ()=>{
+      document.getElementById('shopGold').textContent = profile?.gold ?? 0;
+      buildEmojiShop();
+      document.getElementById('emojiShopModal').classList.remove('hidden');
+    };
+    document.getElementById('btnEmojiShopClose').onclick = ()=>{
+      document.getElementById('emojiShopModal').classList.add('hidden');
     };
   </script>
 

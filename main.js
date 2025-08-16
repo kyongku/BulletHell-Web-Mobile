@@ -196,6 +196,12 @@
         // 이미 보유면 무시
         const owned = (profile.unlocked_emojis||[]).includes(item.emoji) || item.price===0;
         if (owned) return;
+        
+        // 구매 시 골드 확인
+        if (profile.gold < item.price) {
+          toast('골드가 부족합니다!');
+          return;
+        }
 
         // 서버 골드 차감
         const { data: newTotal, error: rpcErr } = await supa.rpc('wallet_add_gold', { delta: -item.price });

@@ -398,10 +398,20 @@
           const owned = (profile.unlocked_emojis||[]).includes(item.emoji) || item.price===0;
           if (owned) return;
 
-          // 골드 차감
-          const { data: newTotal, error: rpcErr } = await supa.rpc('wallet_add_gold', { delta: -item.price });
-          if (rpcErr) { toast('골드 차감 실패'); return; }
-          profile.gold = (newTotal|0);
+          // 골드 차감(안전)
+          const { data: newTotal, error: spendErr } =
+            await supa.rpc('wallet_spend_gold', { cost: item.price });
+
+          if (spendErr || typeof newTotal !== 'number' || newTotal < 0) {
+            if (spendErr && /insufficient_gold/i.test(spendErr.message)) {
+              toast('골드가 부족합니다!');
+            } else {
+              toast('구매 실패' + (spendErr ? `: ${spendErr.message}` : ''));
+            }
+            return;
+          }
+          profile.gold = newTotal;
+
 
           // 보유 이모지 추가
           const next = Array.from(new Set([...(profile.unlocked_emojis||['⭐']), item.emoji]));

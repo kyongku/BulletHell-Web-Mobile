@@ -210,12 +210,11 @@
 
         // 2) 로컬 선확인
         if ((profile.gold|0) < (item.price|0)) {
-          console.log("💥 RETURN 실행됨! gold=", profile.gold, "price=", item.price);
+          console.log("골드 부족 체크 실행됨, 현재 골드:", profile.gold, "가격:", item.price);
           toast('골드가 부족합니다!');
+          btn.disabled = false;
           return;
         }
-
-        console.log("➡️ 구매 진행, gold=", profile.gold, "price=", item.price);
 
 
         // 3) 서버에서 원자적으로 차감 (뽑기와 동일한 방식)

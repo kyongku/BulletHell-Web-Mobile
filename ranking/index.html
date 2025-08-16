@@ -5,16 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
   <title>랭킹 — BulletHell Mobile</title>
   <style>
+    :root { color-scheme: dark; }
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0f14; color:#e6e6e6; }
-    header { position:sticky; top:0; display:flex; gap:8px; align-items:center; padding:10px; background:rgba(12,16,20,.8); backdrop-filter:blur(8px); }
+    header { position:sticky; top:0; display:flex; gap:8px; align-items:center; padding:10px; background:rgba(12,16,20,.8); backdrop-filter:blur(8px); z-index:10; }
     button { border:1px solid rgba(255,255,255,.15); background:#132033; color:#e6f4ff; padding:8px 12px; border-radius:10px; font-weight:700; cursor:pointer; }
     .ghost { background:transparent; }
-    main { padding: 10px; }
+    main { padding: 10px; max-width: 640px; margin: 0 auto; }
+    h2 { margin:10px 0 6px 0; }
     .card { border:1px solid #1f2a37; background:#0f141b; border-radius:12px; padding:10px; margin:8px 0; display:flex; align-items:center; gap:10px; }
+    .rank { width:32px; text-align:right; color:#94a3b8; }
     .avatar { width:36px; height:36px; border-radius:50%; background:#1a2332; display:grid; place-items:center; font-size:18px; }
-    .name { font-weight:700; }
+    .name { font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 50vw; }
     .score { margin-left:auto; font-variant-numeric: tabular-nums; }
     .muted { color:#94a3b8; font-size:12px; }
+    .toolbar { display:flex; gap:8px; align-items:center; margin:6px 0 10px; }
+    input[type="search"] { flex:1; background:#0f1a29; border:1px solid #1f2a37; color:#e6f4ff; border-radius:10px; padding:8px 10px; }
+    .empty { color:#94a3b8; padding:12px 4px; }
   </style>
 </head>
 <body>
@@ -23,31 +29,43 @@
     <div style="flex:1"></div>
     <button onclick="location.href='../index.html'">메인</button>
   </header>
+
   <main>
-    <h2 style="margin:10px 0 4px 0;">모바일 랭킹 (유저별 최고점)</h2>
-    <div id="list">불러오는 중...</div>
+    <h2>모바일 랭킹 (유저별 최고점)</h2>
+    <div class="toolbar">
+      <input id="q" type="search" placeholder="닉네임 검색(예: 경구)" />
+      <button id="btnRefresh">새로고침</button>
+    </div>
+    <div id="list" class="empty">불러오는 중...</div>
   </main>
 
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+    // 메인과 동일하게 sessionStorage를 사용 (RLS 인증 문제 방지)
     const supa = createClient(
       'https://pecoerlqanocydrdovbb.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs'
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs',
+      { auth: { persistSession: true, autoRefreshToken: true, storage: window.sessionStorage } }
     );
 
-    // rankings 테이블에서 최근 N개를 가져와 유저별 최고 점수만 남긴다.
-    async function loadFromRankings() {
-      // 최대 1000개만 읽어온 뒤 클라이언트에서 유저별 최고점 집계
-      const r = await supa
+    const $ = (s)=>document.querySelector(s);
+    const listEl = $('#list');
+    const qEl = $('#q');
+
+    // 유저별 최고점만 남기기
+    async function fetchBestRows() {
+      // rankings에서 상위 1000개만 가져온 뒤 클라이언트에서 user_id 최고점만 추림
+      const res = await supa
         .from('rankings')
         .select('user_id, nickname, tag, emoji, score')
         .order('score', { ascending: false })
         .limit(1000);
 
-      if (r.error) return r;
+      if (res.error) return { error: res.error, data: [] };
 
-      const best = new Map(); // user_id -> {user_id,nickname,tag,emoji,score}
-      for (const row of r.data) {
+      const best = new Map(); // user_id -> row
+      for (const row of res.data) {
         const cur = best.get(row.user_id);
         if (!cur || row.score > cur.score) best.set(row.user_id, row);
       }
@@ -55,26 +73,59 @@
       return { data: rows };
     }
 
-    async function load(){
-      const list = document.getElementById('list');
-      const res = await loadFromRankings();
-      if (res.error){ list.textContent = '불러오기 실패: ' + res.error.message; return; }
-      const rows = res.data || [];
-      if (!rows.length){ list.textContent = '아직 점수가 없습니다.'; return; }
-
-      list.innerHTML = rows.map((r, i) => {
+    function render(rows) {
+      if (!rows.length) {
+        listEl.classList.add('empty');
+        listEl.textContent = '아직 점수가 없습니다.';
+        return;
+      }
+      listEl.classList.remove('empty');
+      listEl.innerHTML = rows.map((r, i) => {
         const nameTag = `${r.nickname ?? 'Unknown'}#${r.tag ?? '0000'}`;
         const emoji = r.emoji || '⭐';
         return `
           <div class="card">
-            <div class="muted" style="width:28px;text-align:right;">${i+1}</div>
+            <div class="rank">${i+1}</div>
             <div class="avatar">${emoji}</div>
-            <div class="name">${nameTag}</div>
+            <div class="name" title="${nameTag}">${nameTag}</div>
             <div class="score">${r.score}</div>
           </div>
         `;
       }).join('');
     }
+
+    async function load() {
+      listEl.textContent = '불러오는 중...';
+      const { data, error } = await fetchBestRows();
+
+      // RLS로 막히는 경우 안내
+      if (error) {
+        console.warn(error);
+        listEl.innerHTML = `
+          <div class="empty">
+            랭킹을 불러오지 못했습니다.<br/>
+            ${error.message || '권한/네트워크 오류'}<br/>
+            <span class="muted">로그인이 필요할 수 있어요. 메인 → 로그인 후 다시 시도하세요.</span>
+          </div>`;
+        return;
+      }
+
+      // 검색 필터
+      const q = (qEl.value || '').trim().toLowerCase();
+      const filtered = q
+        ? data.filter(r => (r.nickname || '').toLowerCase().includes(q))
+        : data;
+
+      render(filtered);
+    }
+
+    $('#btnRefresh').onclick = load;
+    qEl.oninput = load;
+
+    // (선택) 세션이 아예 없으면 로그인 페이지로 보내고 싶다면 주석 해제
+    // const { data: { session } } = await supa.auth.getSession();
+    // if (!session) location.href = '../login.html';
+
     load();
   </script>
 </body>

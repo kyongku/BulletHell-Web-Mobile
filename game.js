@@ -533,13 +533,14 @@ window.GameInterop = window.GameInterop || {};
 window.GameInterop.onBossClear = window.GameInterop.onBossClear || function(_count){};
 
 // 점수 저장: rankings(메인) + scores(레거시)에도 남김
+// 교체본
 window.GameInterop.saveScore = window.GameInterop.saveScore || async function(score, emojiFromHeader){
-  try{
+  try {
     ensureSupa();
     const { data: { user } } = await supa.auth.getUser();
     if (!user) return { ok:false, reason:'not_logged_in' };
 
-    // 프로필 정보 로드
+    // 프로필(닉/태그/이모지)
     const { data: prof, error: pErr } = await supa
       .from('profiles')
       .select('nickname, tag, selected_emoji')
@@ -547,27 +548,31 @@ window.GameInterop.saveScore = window.GameInterop.saveScore || async function(sc
       .maybeSingle();
     if (pErr || !prof) return { ok:false, reason:'no_profile' };
 
-    const emoji = (emojiFromHeader ?? prof.selected_emoji ?? '⭐');
     const row = {
       user_id: user.id,
       nickname: prof.nickname,
       tag: prof.tag,
-      emoji,
+      emoji: (emojiFromHeader ?? prof.selected_emoji ?? '⭐'),
       score: Math.floor(score|0)
     };
 
-    // rankings에 저장 (RLS: user_id = auth.uid())
+    // 1) 메인 랭킹 저장
     const { error: rErr } = await supa.from('rankings').insert(row);
-    if (rErr) return { ok:false, reason:rErr.message };
+    if (rErr) return { ok:false, reason: rErr.message };
 
-    // 레거시 scores에도 남기기(실패 무시)
-    await supa.from('scores').insert({ user_id: user.id, score: row.score }).catch(()=>{});
+    // 2) (선택) 레거시 scores에도 남김 — 실패해도 무시
+    try {
+      await supa.from('scores').insert({ user_id: user.id, score: row.score });
+    } catch (e) {
+      console.warn('scores insert 실패(무시):', e?.message);
+    }
 
     return { ok:true };
-  }catch(e){
+  } catch (e) {
     return { ok:false, reason: e?.message || 'unknown' };
   }
 };
+
 
 //////////////////// Loop & Buttons ////////////////////
 let last=0, raf=0;

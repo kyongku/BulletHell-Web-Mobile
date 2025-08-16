@@ -49,7 +49,7 @@
     { id:'e_skull',      emoji:'💀', name:'Skull',      price: 8000 },
     { id:'e_dragon',     emoji:'🐉', name:'Dragon',     price: 15000 },
     { id:'e_trophy',     emoji:'🏆', name:'Trophy',     price: 40000 },
-    { id:'e_goldmedal',  emoji:'🥇', name:'Champion',   price: 100000 }
+    { id:'e_Champion',   emoji:'🥇', name:'Champion',   price: 100000 }
   ];
 
   // ========= Auth / Profile =========

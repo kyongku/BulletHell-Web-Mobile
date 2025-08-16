@@ -167,7 +167,7 @@
     });
   }
 
-  // ========= Emoji Shop (부족 골드 방지) =========
+  // ========= Emoji Shop (서버 원자 차감) =========
   function buildEmojiShop() {
     const grid = $('#emojiShopGrid'); if (!grid) return;
     const have = new Set(profile.unlocked_emojis || ['⭐']);
@@ -181,63 +181,70 @@
             <div class="nm">${e.name}</div>
             <div class="pr">💰 ${e.price}</div>
           </div>
-          <button class="buy" data-buy="${e.id}" ${owned?'disabled':''}>${owned?'보유중':'구매'}</button>
+          <button class="buy" data-buy="${e.id}" ${owned?'disabled':''}>
+            ${owned?'보유중':'구매'}
+          </button>
         </div>
       `;
     }).join('');
 
     grid.querySelectorAll('[data-buy]').forEach(btn => {
       btn.onclick = async () => {
+        // 중복 클릭 방지
+        if (btn.disabled) return;
         const id = btn.getAttribute('data-buy');
         const item = EMOJI_STORE.find(x => x.id === id);
         if (!item) return;
 
-        // 0) 유효성
-        if (!Number.isFinite(item.price) || item.price < 0) {
-          toast('잘못된 상품입니다.');
-          return;
-        }
-
-        // 1) 이미 보유면 무시
+        // 이미 보유면 무시
         const owned = (profile.unlocked_emojis || []).includes(item.emoji) || item.price === 0;
         if (owned) return;
 
-        // 2) 최신 잔액 동기화(선택)
+        btn.disabled = true;
+
+        // 1) (선택) 최신 잔액 동기화
         try {
           const { data: total0 } = await supa.rpc('wallet_add_gold', { delta: 0 });
           if (typeof total0 === 'number') profile.gold = total0;
         } catch (_) {}
 
-        // 3) 로컬 선확인
+        // 2) 로컬 선확인
         if ((profile.gold|0) < (item.price|0)) {
           toast('골드가 부족합니다!');
+          btn.disabled = false;
           return;
         }
 
-        // 4) 서버에서 원자적으로 차감 (최종 보증)
+        // 3) 서버에서 원자적으로 차감 (뽑기와 동일한 방식)
         const { data: newTotal, error: spendErr } =
           await supa.rpc('wallet_spend_gold', { cost: item.price });
 
-        // 5) 실패 처리/응답 검증
-        if (spendErr || typeof newTotal !== 'number' || !Number.isFinite(newTotal) || newTotal < 0) {
+        if (spendErr || typeof newTotal !== 'number') {
           if (spendErr && /insufficient_gold/i.test(spendErr.message)) {
             toast('골드가 부족합니다!');
           } else {
             toast('구매 실패' + (spendErr ? `: ${spendErr.message}` : ''));
           }
+          btn.disabled = false;
           return;
         }
 
-        // 6) 여기까지 왔으면 서버 차감 성공
-        profile.gold = newTotal; // 비트 캐스팅(|0) 쓰지 말 것
+        // 4) 차감 성공 → 보유 이모지 저장
+        profile.gold = newTotal;               // 서버가 계산한 최신 잔액
         const next = Array.from(new Set([...(profile.unlocked_emojis || ['⭐']), item.emoji]));
         const { error } = await supa.from('profiles')
           .update({ unlocked_emojis: next })
           .eq('user_id', profile.user_id);
-        if (error) { toast('저장 실패'); return; }
+
+        if (error) {
+          toast('저장 실패: ' + error.message);
+          btn.disabled = false;
+          return;
+        }
+
         profile.unlocked_emojis = next;
 
-        // 7) UI 갱신
+        // 5) UI 갱신
         applyHeaderUI();
         buildEmojiShop();
         buildEmojiGrid();

@@ -34,3 +34,12 @@ input[type="email"],input[type="password"],input[type="text"]{width:100%;padding
 .chip .chip-color{width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.25)}
 .badge{margin-left:auto;padding:2px 6px;border-radius:6px;font-size:12px}
 .g-N{background:#1f2937} .g-R{background:#1e293b} .g-E{background:#312e81} .g-L{background:#7c2d12} .g-GOD{background:#4c1d95}
+
+/* ▶ 추가: 이모지 상점 레이아웃 */
+.emoji-shop{display:grid;grid-template-columns:1fr;gap:8px}
+.emoji-shop .item{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid #223258;border-radius:10px;background:#0f172a}
+.emoji-shop .icon{font-size:22px;width:36px;text-align:center;background:#1a2332;border-radius:8px}
+.emoji-shop .meta{flex:1}
+.emoji-shop .nm{font-weight:600}
+.emoji-shop .pr{color:#9fb2c8}
+.emoji-shop .buy{min-width:72px}

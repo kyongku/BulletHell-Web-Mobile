@@ -38,17 +38,17 @@
     { id:'god-rainbow',  name:'GOD Rainbow'  }
   ];
 
-  // 이모지 상점 판매 목록(원하는 대로 바꿔도 됨)
+  // 이모지 상점 판매 목록
   const EMOJI_STORE = [
-    { id:'e_star',   emoji:'⭐', name:'Star',   price:  0 }, // 기본 무료
-    { id:'e_smile',  emoji:'😄', name:'Smile',  price: 100 },
-    { id:'e_fire',   emoji:'🔥', name:'Fire',   price: 500 },
-    { id:'e_crown',  emoji:'👑', name:'Crown',  price: 1000 },
-    { id:'e_rocket', emoji:'🚀', name:'Rocket', price: 4000 },
-    { id:'e_skull',  emoji:'💀', name:'Skull',  price: 8000 },
-    { id:'e_dragon', emoji:'🐉', name:'Dragon', price: 15000 },
-    { id:'e_trophy', emoji:'🏆', name:'Trophy', price: 40000 },
-    { id:'e_trophy', emoji:'🥇', name:'Champion', price: 100000 }
+    { id:'e_star',       emoji:'⭐', name:'Star',       price:   0 },   // 기본 무료
+    { id:'e_smile',      emoji:'😄', name:'Smile',      price: 100 },
+    { id:'e_fire',       emoji:'🔥', name:'Fire',       price: 500 },
+    { id:'e_crown',      emoji:'👑', name:'Crown',      price: 1000 },
+    { id:'e_rocket',     emoji:'🚀', name:'Rocket',     price: 4000 },
+    { id:'e_skull',      emoji:'💀', name:'Skull',      price: 8000 },
+    { id:'e_dragon',     emoji:'🐉', name:'Dragon',     price: 15000 },
+    { id:'e_trophy',     emoji:'🏆', name:'Trophy',     price: 40000 },
+    { id:'e_goldmedal',  emoji:'🥇', name:'Champion',   price: 100000 }
   ];
 
   // ========= Auth / Profile =========
@@ -289,7 +289,6 @@
           emoji: effectiveEmoji
         });
         if (error) return { ok:false, reason: error.message };
-        // 최고점 갱신
         if ((score|0) > (bestScore|0)) bestScore = score|0;
         applyHeaderUI();
         return { ok:true };
@@ -342,7 +341,6 @@
   (async function boot(){
     session = await getSession();
     if (!session) {
-      // 로그인 페이지로
       location.href = './login.html';
       return;
     }
@@ -357,7 +355,6 @@
       get selectedSkin(){ return profile?.selected_skin || 'white'; }
     };
 
-    // 메인 진입 시 게임 섹션은 숨김
     hide($('#gameWrap'));
     show($('#mainMenu'));
     show($('#topBar'));

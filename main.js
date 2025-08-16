@@ -190,30 +190,36 @@
     grid.querySelectorAll('[data-buy]').forEach(btn => {
       btn.onclick = async () => {
         const id = btn.getAttribute('data-buy');
-        const item = EMOJI_STORE.find(x=>x.id===id);
+        const item = EMOJI_STORE.find(x => x.id === id);
         if (!item) return;
-    
-        // 이미 보유면 무시
-        const owned = (profile.unlocked_emojis||[]).includes(item.emoji) || item.price === 0;
+
+        // 0) 유효성
+        if (!Number.isFinite(item.price) || item.price < 0) {
+          toast('잘못된 상품입니다.');
+          return;
+        }
+
+        // 1) 이미 보유면 무시
+        const owned = (profile.unlocked_emojis || []).includes(item.emoji) || item.price === 0;
         if (owned) return;
-    
-        // --- 최신 잔액 동기화 (선택) ---
+
+        // 2) (선택) 최신 잔액 동기화 — 필요 없다면 이 블록은 지워도 됨
         try {
           const { data: total0 } = await supa.rpc('wallet_add_gold', { delta: 0 });
-          if (typeof total0 === 'number') profile.gold = total0|0;
+          if (typeof total0 === 'number') profile.gold = total0 | 0;
         } catch (_) {}
-    
-        // --- 로컬 잔액 체크(숫자화해서 비교) ---
-        if ( (profile.gold|0) < (item.price|0) ) {
+
+        // 3) 로컬 선확인
+        if ((profile.gold | 0) < (item.price | 0)) {
           toast('골드가 부족합니다!');
           return;
         }
-    
-        // --- 서버에서 원자적으로 차감 ---
+
+        // 4) 서버에서 원자적으로 차감 (최종 보증)
         const { data: newTotal, error: spendErr } =
           await supa.rpc('wallet_spend_gold', { cost: item.price });
-    
-        if (spendErr) {            // 서버가 최종 보증 — 부족/경쟁상황도 여기서 막힘
+
+        if (spendErr) {
           if (/insufficient_gold/i.test(spendErr.message)) {
             toast('골드가 부족합니다!');
           } else {
@@ -222,16 +228,22 @@
           return;
         }
 
-        profile.gold = (newTotal|0);
-    
-        // 보유 목록 업데이트
-        const next = Array.from(new Set([...(profile.unlocked_emojis||['⭐']), item.emoji]));
+        // 5) 응답 검증
+        if (typeof newTotal !== 'number') {
+          toast('구매 실패: 응답 오류');
+          return;
+        }
+        profile.gold = (newTotal | 0);
+
+        // 6) 보유 목록 업데이트
+        const next = Array.from(new Set([...(profile.unlocked_emojis || ['⭐']), item.emoji]));
         const { error } = await supa.from('profiles')
           .update({ unlocked_emojis: next })
           .eq('user_id', profile.user_id);
         if (error) { toast('저장 실패'); return; }
         profile.unlocked_emojis = next;
-    
+
+        // 7) UI 갱신
         applyHeaderUI();
         buildEmojiShop();
         buildEmojiGrid();

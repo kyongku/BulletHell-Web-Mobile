@@ -207,34 +207,29 @@ function bossSpiral(cx, cy, step, count, speed, clr){
   }
 }
 
-//////////////////// Skin Painter (확장) ////////////////////
+//////////////////// Skin Painter (강화된 GOD Rainbow) ////////////////////
 let cachedSkinId = null, painter = makePainter('white');
 
 function makeStripePattern(ctx, colors, angleDeg = 45, stripe = 8) {
   const off = document.createElement('canvas');
   off.width = off.height = stripe * 2;
   const octx = off.getContext('2d');
-
   octx.save();
   octx.translate(off.width/2, off.height/2);
   octx.rotate(angleDeg * Math.PI/180);
   octx.translate(-off.width/2, -off.height/2);
-
-  octx.fillStyle = colors[0];
-  octx.fillRect(0, 0, off.width, off.height);
-  octx.fillStyle = colors[1];
-  octx.fillRect(0, 0, off.width, stripe);
-
+  octx.fillStyle = colors[0]; octx.fillRect(0, 0, off.width, off.height);
+  octx.fillStyle = colors[1]; octx.fillRect(0, 0, off.width, stripe);
   octx.restore();
   return ctx.createPattern(off, 'repeat');
 }
 function makeGradient(ctx, type, stops) {
-  let g;
-  if (type === 'h') g = ctx.createLinearGradient(0, 0, 20, 0);
-  else              g = ctx.createLinearGradient(0, 0, 0, 20);
+  let g = (type === 'h') ? ctx.createLinearGradient(-20, 0, 20, 0)
+                         : ctx.createLinearGradient(0, -20, 0, 20);
   for (const [pos, color] of stops) g.addColorStop(pos, color);
   return g;
 }
+
 function makePainter(id){
   return function(){
     const r = state.player.r;
@@ -243,45 +238,83 @@ function makePainter(id){
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI*2);
 
+    // 기본 단색 팔레트
     const solid = {
       white:'#ffffff', mint:'#7ef5d1', sky:'#7ecbff', lime:'#a6ff6b',
       orange:'#ffb36b', violet:'#ba8bff', aqua:'#6bfffb'
     };
+
     if (solid[id]) {
       ctx.fillStyle = solid[id];
-    } else {
-      switch(id){
-        case 'stripe-mint-sky':
-          ctx.fillStyle = makeStripePattern(ctx, ['#7ef5d1','#7ecbff'], 45, 8); break;
-        case 'stripe-orange-violet':
-          ctx.fillStyle = makeStripePattern(ctx, ['#ffb36b','#ba8bff'], 45, 8); break;
-        case 'stripe-gold-silver':
-          ctx.fillStyle = makeStripePattern(ctx, ['#ffd700','#c0c0c0'], 45, 8); break;
-        case 'grad-sunrise':
-          ctx.fillStyle = makeGradient(ctx, 'h', [
-            [0.00,'#ff9a9e'], [0.50,'#fad0c4'], [1.00,'#ffd1ff']
-          ]); break;
-        case 'grad-sea':
-          ctx.fillStyle = makeGradient(ctx, 'h', [
-            [0.00,'#36d1dc'], [1.00,'#5b86e5']
-          ]); break;
-        case 'grad-sunset':
-          ctx.fillStyle = makeGradient(ctx, 'h', [
-            [0.00,'#0b486b'], [1.00,'#f56217']
-          ]); break;
-        case 'god-rainbow':
-          ctx.fillStyle = makeGradient(ctx, 'h', [
-            [0.00,'red'], [0.17,'orange'], [0.34,'yellow'],
-            [0.51,'green'], [0.68,'blue'], [0.85,'indigo'], [1.00,'violet']
-          ]); break;
-        default:
-          ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    switch(id){
+      case 'stripe-mint-sky':
+        ctx.fillStyle = makeStripePattern(ctx, ['#7ef5d1','#7ecbff'], 45, 8); break;
+      case 'stripe-orange-violet':
+        ctx.fillStyle = makeStripePattern(ctx, ['#ffb36b','#ba8bff'], 45, 8); break;
+      case 'stripe-gold-silver':
+        ctx.fillStyle = makeStripePattern(ctx, ['#ffd700','#c0c0c0'], 45, 8); break;
+      case 'grad-sunrise':
+        ctx.fillStyle = makeGradient(ctx, 'h', [
+          [0.00,'#ff9a9e'], [0.50,'#fad0c4'], [1.00,'#ffd1ff']
+        ]); break;
+      case 'grad-sea':
+        ctx.fillStyle = makeGradient(ctx, 'h', [
+          [0.00,'#36d1dc'], [1.00,'#5b86e5']
+        ]); break;
+      case 'grad-sunset':
+        ctx.fillStyle = makeGradient(ctx, 'h', [
+          [0.00,'#0b486b'], [1.00,'#f56217']
+        ]); break;
+
+      // ★ 업그레이드된 GOD Rainbow
+      case 'god-rainbow': {
+        // 시간에 따라 회전하는 무지개(애니메이션)
+        const t = performance.now() * 0.12 / 1000; // 회전 속도
+        const phase = (t * 360) % 360;
+        const stops = [];
+        // 7색 그라데이션을 균등 분할 + phase로 회전
+        const hues = [0, 45, 90, 135, 180, 240, 300, 360].map(h => (h + phase) % 360);
+        for (let i=0; i<hues.length; i++){
+          stops.push([i/(hues.length-1), `hsl(${hues[i]} 100% 60%)`]);
+        }
+        ctx.fillStyle = makeGradient(ctx, 'h', stops);
+
+        // 내부 채움 + 강한 광채
+        ctx.shadowColor = 'rgba(255,255,255,0.85)';
+        ctx.shadowBlur = 18;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // 라이트닝 링(외곽선) + 가벼운 오라
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = `hsla(${(phase+180)%360} 100% 70% / 0.9)`;
+        ctx.stroke();
+
+        ctx.globalAlpha = 0.18;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0,0,r+2,0,Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 0.10;
+        ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.restore();
+        return;
       }
+
+      default:
+        ctx.fillStyle = '#ffffff';
     }
     ctx.fill();
     ctx.restore();
   };
 }
+
 
 //////////////////// Gold Utils ////////////////////
 async function grantGold(amount){

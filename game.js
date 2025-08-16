@@ -22,7 +22,7 @@ const CFG = {
   normalSpeedMult: 5,
 
   // Boss difficulty (easy)
-  bossSpeedMult: 20,
+  bossSpeedMult: 30,
   bossBaseDmg: 10,
   bossDmgStep: 2,
   bossDmgEveryMs: 6000,

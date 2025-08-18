@@ -170,8 +170,8 @@ class Heal {
 const LASER = {
   telegraphMs: 500,
   beamMs: 500,
-  widthWarn: 10,
-  widthBeam: 7,
+  widthWarn: 25,
+  widthBeam: 23,
   dps: 90,
   flashWarn: false
 };

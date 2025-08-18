@@ -43,3 +43,9 @@ input[type="email"],input[type="password"],input[type="text"]{width:100%;padding
 .emoji-shop .nm{font-weight:600}
 .emoji-shop .pr{color:#9fb2c8}
 .emoji-shop .buy{min-width:72px}
+/* ▶ 추가: 프로필 모달 내부 스크롤 */
+#profileModal .card{
+  max-height:90vh;              /* 화면 높이의 90%까지만 */
+  overflow-y:auto;              /* 넘치면 세로 스크롤 */
+  -webkit-overflow-scrolling:touch; /* 모바일 관성 스크롤 */
+}

@@ -24,7 +24,7 @@ const CFG = {
   bossDmgEveryMs: 6000,
 
   minMs: 200,
-  freezeAfter: 18000,
+  freezeAfter: 40000,
 
   scorePerSec: 50,
   goldFirstMs: 80000,

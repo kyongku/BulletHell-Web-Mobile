@@ -9,19 +9,19 @@
 const W = 350, H = 350;
 const CFG = {
   growthMs: 30000,
-  growthAmount: 5,
-  healMissingPct: 0.05,
-  healPackFlat: 7,
+  growthAmount: 10,
+  healMissingPct: 0.10,
+  healPackFlat: 10,
   healPackSpawnMs: 10000,
 
   bulletSpeedBase: 20.0,
-  bulletSpeedScale: 1 / 2000,
-  normalSpeedMult: 5,
+  bulletSpeedScale: 1 / 1500,
+  normalSpeedMult: 10,
 
   bossSpeedMult: 30,
-  bossBaseDmg: 10,
+  bossBaseDmg: 20,
   bossDmgStep: 2,
-  bossDmgEveryMs: 6000,
+  bossDmgEveryMs: 3000,
 
   minMs: 200,
   freezeAfter: 40000,
@@ -170,8 +170,8 @@ class Heal {
 const LASER = {
   telegraphMs: 500,
   beamMs: 500,
-  widthWarn: 25,
-  widthBeam: 23,
+  widthWarn: 13,
+  widthBeam: 11,
   dps: 90,
   flashWarn: false
 };
@@ -233,17 +233,17 @@ function spawnLaser(angleRad, opts = {}) {
   telegraphs.push({ angle: angleRad, t0: now, telegraphMs, beamMs });
 }
 
-// 수정: 기본값을 30도 × 12발, 0.3초 간격으로
-function spawnRotatingSequence(startDeg = 0, count = 12, stepDeg = 30, intervalMs = 700, opts = {}) {
+// 수정: 기본값을 30도 × 12발, 0.7초 간격으로
+function spawnRotatingSequence(startDeg = 0, count = 24, stepDeg = 15, intervalMs = 700, opts = {}) {
   for (let i = 0; i < count; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     setTimeout(() => spawnLaser(a, opts), i * intervalMs);
   }
 }
 
-// 선택: 동시에 8발 즉시 일제사격
-function spawnBurst8(startDeg = 0, stepDeg = 45, opts = {}) {
-  for (let i = 0; i < 8; i++) {
+// 선택: 동시에 16발 즉시 일제사격
+function spawnBurst8(startDeg = 0, stepDeg = , opts = {}) {
+  for (let i = 0; i < 16; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     spawnLaser(a, opts);
   }

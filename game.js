@@ -234,7 +234,7 @@ function spawnLaser(angleRad, opts = {}) {
 }
 
 // 수정: 기본값을 30도 × 12발, 0.7초 간격으로
-function spawnRotatingSequence(startDeg = 0, count = 24, stepDeg = 15, intervalMs = 700, opts = {}) {
+function spawnRotatingSequence(startDeg = 0, count = 12, stepDeg = 30, intervalMs = 700, opts = {}) {
   for (let i = 0; i < count; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     setTimeout(() => spawnLaser(a, opts), i * intervalMs);

@@ -10,12 +10,12 @@ const W = 350, H = 350;
 const CFG = {
   growthMs: 30000,
   growthAmount: 5,
-  healMissingPct: 0.10,
+  healMissingPct: 0.05,
   healPackFlat: 7,
-  healPackSpawnMs: 9000,
+  healPackSpawnMs: 10000,
 
   bulletSpeedBase: 20.0,
-  bulletSpeedScale: 1 / 3000,
+  bulletSpeedScale: 1 / 2000,
   normalSpeedMult: 5,
 
   bossSpeedMult: 30,
@@ -172,7 +172,7 @@ const LASER = {
   beamMs: 300,
   widthWarn: 10,
   widthBeam: 7,
-  dps: 45,
+  dps: 90,
   flashWarn: false
 };
 
@@ -233,8 +233,8 @@ function spawnLaser(angleRad, opts = {}) {
   telegraphs.push({ angle: angleRad, t0: now, telegraphMs, beamMs });
 }
 
-// 수정: 기본값을 45도 × 8발, 0.4초 간격으로
-function spawnRotatingSequence(startDeg = 0, count = 8, stepDeg = 45, intervalMs = 1000, opts = {}) {
+// 수정: 기본값을 30도 × 12발, 0.4초 간격으로
+function spawnRotatingSequence(startDeg = 0, count = 12, stepDeg = 30, intervalMs = 1000, opts = {}) {
   for (let i = 0; i < count; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     setTimeout(() => spawnLaser(a, opts), i * intervalMs);

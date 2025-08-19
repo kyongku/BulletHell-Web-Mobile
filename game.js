@@ -14,22 +14,22 @@ const CFG = {
   healPackFlat: 10,
   healPackSpawnMs: 10000,
 
-  bulletSpeedBase: 20.0,
-  bulletSpeedScale: 1 / 1500,
+  bulletSpeedBase: 25.0,
+  bulletSpeedScale: 1 / 2000,
   normalSpeedMult: 10,
 
   bossSpeedMult: 30,
-  bossBaseDmg: 20,
-  bossDmgStep: 2,
+  bossBaseDmg: 10,
+  bossDmgStep: 5,
   bossDmgEveryMs: 3000,
 
   minMs: 200,
   freezeAfter: 40000,
 
   scorePerSec: 50,
-  goldFirstMs: 80000,
+  goldFirstMs: 140000,
   goldIntervalMs: 60000,
-  goldPerPayout: 10,
+  goldPerPayout: 30,
 
   SUPABASE_URL: "https://pecoerlqanocydrdovbb.supabase.co",
   SUPABASE_ANON: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY29lcmxxYW5vY3lkcmRvdmJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNzM4ODYsImV4cCI6MjA3MDc0OTg4Nn0.gbQlIPV89_IecGzfVxsnjuzLe-TStTYQqMKzV-B4CUs"
@@ -242,8 +242,8 @@ function spawnRotatingSequence(startDeg = 0, count = 12, stepDeg = 30, intervalM
 }
 
 // 선택: 동시에 16발 즉시 일제사격
-function spawnBurst8(startDeg = 0, stepDeg = 16, opts = {}) {
-  for (let i = 0; i < 16; i++) {
+function spawnBurst8(startDeg = 0, stepDeg = 9, opts = {}) {
+  for (let i = 0; i < 40; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     spawnLaser(a, opts);
   }

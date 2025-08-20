@@ -110,10 +110,10 @@
     </div>
   </div>
 
-  <!-- 가챠 -->
+  <!-- 가챠 모달 -->
   <div id="gachaModal" class="overlay hidden" role="dialog" aria-modal="true">
     <div class="card">
-      <h3 style="margin:0 0 8px 0;">뽑기 (100 Gold)</h3>
+      <h3 style="margin:0 0 8px 0;">스킨 뽑기 (100 Gold)</h3>
       <div class="muted">확률: N 80% / R 15% / E 4.45% / L 0.45% / GOD 0.05%</div>
       <div id="gachaResult" class="gacha-result muted" style="min-height:24px;margin:8px 0 6px 0;"></div>
       <div class="row actions">
@@ -122,6 +122,79 @@
       </div>
     </div>
   </div>
+
+  <script>
+// =============================
+// Gacha System (Skin + Cosmetic)
+// =============================
+  (function(){
+    const MODAL_ID = 'gachaModal';
+    const BTN_DO_ID = 'btnDoGacha';
+    const BTN_CLOSE_ID = 'btnGachaClose';
+    const RESULT_ID = 'gachaResult';
+
+  // 현재 모드 (skin | cosmetic)
+    let mode = 'skin';
+
+    const $id = (id)=>document.getElementById(id);
+    const modal = ()=>$id(MODAL_ID);
+
+    function setHeader(title, priceText, probText){
+      const m = modal(); if(!m) return;
+      const h3 = m.querySelector('h3');
+      const hint = m.querySelector('.muted');
+      if (h3) h3.textContent = `${title} (${priceText})`;
+      if (hint && probText) hint.textContent = probText;
+    }
+
+    function openGacha(nextMode){
+      mode = (nextMode==='cosmetic') ? 'cosmetic' : 'skin';
+      const m = modal(); if(!m) return;
+
+      if (mode === 'skin') {
+        setHeader('스킨 뽑기','100 Gold','확률: N 80% / R 15% / E 4.45% / L 0.45% / GOD 0.05%');
+      } else {
+        setHeader('코스메틱 뽑기','200 Gold','확률: N 80% / R 15% / E 4.45% / L 0.45% / GOD 0.05%');
+      }
+
+      const out = $id(RESULT_ID);
+      if (out) out.textContent = '';
+
+      m.classList.remove('hidden');
+      $id(BTN_DO_ID)?.focus();
+    }
+
+    function closeGacha(){
+      modal()?.classList.add('hidden');
+      const out = $id(RESULT_ID);
+      if (out) out.textContent = '';
+    }
+
+  // 결과 텍스트 외부에서 세팅 가능
+    function setGachaResult(text){
+      const out = $id(RESULT_ID);
+      if (!out) return;
+      out.classList.remove('muted');
+      out.textContent = text || '';
+    }
+
+  // 닫기 버튼만 바인딩 (뽑기하기는 네가 짜둔 기존 로직이 처리)
+    (function wireCloseOnly(){
+      const btnClose = $id(BTN_CLOSE_ID);
+      if (btnClose && !btnClose.dataset.wired) {
+        btnClose.dataset.wired = '1';
+        btnClose.addEventListener('click', closeGacha);
+      }
+    })();
+
+  // 전역 노출
+    window.openSkinGacha = ()=>openGacha('skin');
+    window.openCosmeticGacha = ()=>openGacha('cosmetic');
+    window.closeGacha = closeGacha;
+    window.getGachaMode = ()=>mode;
+    window.setGachaResult = setGachaResult;
+  })();
+  </script>
 
   <!-- 패치노트 -->
   <div id="patchModal" class="overlay hidden" role="dialog" aria-modal="true">

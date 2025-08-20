@@ -8,8 +8,8 @@
 
 const W = 350, H = 350;
 const CFG = {
-  growthMs: 30000,
-  growthAmount: 10,
+  growthMs: 2000,
+  growthAmount: 1,
   healMissingPct: 0.10,
   healPackFlat: 10,
   healPackSpawnMs: 10000,

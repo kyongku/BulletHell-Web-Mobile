@@ -236,3 +236,55 @@ input[type="email"],input[type="password"],input[type="text"]{
 .emoji-shop .nm{font-weight:600}
 .emoji-shop .pr{color:#9fb2c8}
 .emoji-shop .buy{min-width:72px}
+/* ===== Neon BG layers ===== */
+#gameWrap {
+  position: relative;
+  background: radial-gradient(120% 100% at 50% 0%, #0b0f14 30%, #0a1220 70%, #071426 100%);
+  overflow: hidden;
+}
+
+/* 별/먼지 */
+#gameWrap .bg-stars, 
+#gameWrap .bg-dust {
+  position: absolute; inset: 0; pointer-events: none;
+  background-repeat: repeat;
+  opacity: .35;
+}
+#gameWrap .bg-stars {
+  background-image: radial-gradient(#ffffff 1px, transparent 1px);
+  background-size: 3px 3px;
+  animation: scrollY 40s linear infinite;
+  opacity: .18;
+}
+#gameWrap .bg-dust {
+  background-image: radial-gradient(#7ef5d1 1px, transparent 1px), radial-gradient(#7ecbff 1px, transparent 1px);
+  background-size: 5px 5px, 7px 7px;
+  animation: scrollY 60s linear infinite reverse;
+  opacity: .08;
+}
+
+/* 네온 그리드 */
+#gameWrap .bg-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(#112237 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(90deg, #112237 1px, transparent 1px) 0 0 / 22px 22px;
+  mask-image: radial-gradient(120% 90% at 50% 20%, rgba(0,0,0,1), rgba(0,0,0,0));
+  animation: gridPulse 4s ease-in-out infinite;
+  opacity: .35;
+}
+
+@keyframes scrollY { 
+  0% { background-position-y: 0, 0; } 
+  100% { background-position-y: 600px, -600px; } 
+}
+@keyframes gridPulse {
+  0%,100% { opacity: .35; }
+  50%     { opacity: .5;  }
+}
+
+/* 트레일이 캔버스 아래에 깔리도록 z-index 정리 */
+#gameWrap canvas#gameCanvas { position: relative; z-index: 3; }
+#gameWrap .bg-stars { z-index: 0; }
+#gameWrap .bg-dust  { z-index: 1; }
+#gameWrap .bg-grid  { z-index: 2; }

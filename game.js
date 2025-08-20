@@ -172,7 +172,7 @@ const LASER = {
   beamMs: 500,
   widthWarn: 13,
   widthBeam: 11,
-  dps: 90,
+  dps: 30,
   flashWarn: false
 };
 
@@ -233,15 +233,15 @@ function spawnLaser(angleRad, opts = {}) {
   telegraphs.push({ angle: angleRad, t0: now, telegraphMs, beamMs });
 }
 
-// 수정: 기본값을 30도 × 12발, 0.7초 간격으로
-function spawnRotatingSequence(startDeg = 0, count = 12, stepDeg = 30, intervalMs = 700, opts = {}) {
+// 수정: 기본값을 30도 × 12발, 0.5초 간격으로
+function spawnRotatingSequence(startDeg = 0, count = 12, stepDeg = 30, intervalMs = 500, opts = {}) {
   for (let i = 0; i < count; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     setTimeout(() => spawnLaser(a, opts), i * intervalMs);
   }
 }
 
-// 선택: 동시에 16발 즉시 일제사격
+// 선택: 동시에 40발 즉시 일제사격
 function spawnBurst8(startDeg = 0, stepDeg = 9, opts = {}) {
   for (let i = 0; i < 40; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;

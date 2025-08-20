@@ -14,7 +14,7 @@ const CFG = {
   healPackFlat: 10,
   healPackSpawnMs: 10000,
 
-  bulletSpeedBase: 25.0,
+  bulletSpeedBase: 20.0,
   bulletSpeedScale: 1 / 2000,
   normalSpeedMult: 10,
 
@@ -401,10 +401,10 @@ async function grantGold(amount){
 
 //////////////////// Game State ////////////////////
 const state = {
-  run: false, over: false, time: 0, score: 0, maxHP: 100,
-  player: { x: W / 2, y: H * 0.85, r: 7, speed: 170, hp: 100 },
+  run: false, over: false, time: 0, score: 0, maxHP: 50,
+  player: { x: W / 2, y: H * 0.85, r: 6, speed: 200, hp: 50 },
   bullets: [],
-  spawnT: 0, spawnMs: 700, diffT: 0,
+  spawnT: 0, spawnMs: 500, diffT: 0,
   boss: { active: false, t: 0, next: 3000, count: 0, toggle: 0 },
   growthT: 0,
   items: [], itemT: 0,
@@ -414,10 +414,10 @@ const state = {
 };
 
 function reset(){
-  state.run=true; state.over=false; state.time=0; state.score=0; state.maxHP=100;
-  state.player = { x: W/2, y: H*0.85, r: 7, speed: 170, hp: state.maxHP };
+  state.run=true; state.over=false; state.time=0; state.score=0; state.maxHP=50;
+  state.player = { x: W/2, y: H*0.85, r: 6, speed: 200, hp: state.maxHP };
   state.bullets.length=0;
-  state.spawnT=0; state.spawnMs=700; state.diffT=0;
+  state.spawnT=0; state.spawnMs=500; state.diffT=0;
   state.boss = { active:false, t:0, next:3000, count:0, toggle:0 };
   state.growthT=0; state.items.length=0; state.itemT=0;
   state.nextGoldTime = CFG.goldFirstMs;
@@ -452,7 +452,7 @@ function updateBoss(dt){
   const t = state.boss.t;
   const phase2 = (t >= 10000);
 
-  const cycle = phase2 ? 750 : 900;
+  const cycle = phase2 ? 500 : 800;
   if (Math.floor(t/cycle) !== Math.floor(prev/cycle)){
     if ((state.boss.toggle++ % 2) === 0){
       if (!phase2) bossRing(W/2,H/2,12,1.8,10,'#38bdf8');
@@ -462,11 +462,11 @@ function updateBoss(dt){
       else         bossSpiral(W/2,H/2,0.44,10,1.9,'#f472b6');
     }
     const startDeg = (state.boss.toggle*23 + (phase2?15:0)) % 360;
-    spawnRotatingSequence(startDeg, 8, 45, phase2 ? 320 : 400, {
+    spawnRotatingSequence(startDeg, 12, 30, phase2 ? 300 : 400, {
       telegraphMs: LASER.telegraphMs, beamMs: LASER.beamMs
     });
   }
-  if (t >= 20000) endBossPhase();
+  if (t >= 25000) endBossPhase();
 }
 
 function update(dt){

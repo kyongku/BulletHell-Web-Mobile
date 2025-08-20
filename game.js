@@ -1,9 +1,9 @@
 // game.js — BulletHell Mobile (레이저 + 랭킹 저장 시 이모지 포함)
 // - Score: 50/sec
-// - Boss: every 3,000 score (≈1 min), stays 20s
-// - Heal: missing 10% + 7
-// - Growth: +10 MaxHP every 30s (growthAmount=5)
-// - Gold: +10G at 1m20s, then every 1 min
+// - Boss: every 3,000 score (≈1 min), stays 25s
+// - Heal: missing 10% + 10
+// - Growth: +1 MaxHP every 2s (growthAmount=2)
+// - Gold: +30G at 2m20s, then every 1 min
 // - Supabase RPC: wallet_add_gold(delta)
 
 const W = 350, H = 350;

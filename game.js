@@ -242,8 +242,8 @@ function spawnRotatingSequence(startDeg = 0, count = 12, stepDeg = 30, intervalM
 }
 
 // 선택: 동시에 40발 즉시 일제사격
-function spawnBurst8(startDeg = 0, stepDeg = 9, opts = {}) {
-  for (let i = 0; i < 40; i++) {
+function spawnBurst8(startDeg = 0, stepDeg = 20, opts = {}) {
+  for (let i = 0; i < 18; i++) {
     const a = (startDeg + i * stepDeg) * Math.PI / 180;
     spawnLaser(a, opts);
   }
